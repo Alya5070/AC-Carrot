@@ -17,32 +17,32 @@ class PaidRequestModal(discord.ui.Modal):
         
         self.budget = discord.ui.TextInput(
             label="Budget (AUD/USD/CAD/etc.)",
-            placeholder="e.g., Crypto/Robux is NOT ALLOWED.",
+            placeholder="Crypto/Robux is NOT ALLOWED",
             default=budget_val,
             required=True
         )
         self.sfw_nsfw = discord.ui.TextInput(
             label="SFW/NSFW",
-            placeholder="Choose ONE.",
+            placeholder="Choose one only",
             default=sfw_nsfw_val,
             required=True
         )
         self.payment_method = discord.ui.TextInput(
             label="Payment Method",
-            placeholder="e.g., Cryto/Robux/Royalty is NOT ALLOWED",
+            placeholder="Cryto/Robux/Royalty is NOT ALLOWED",
             default=payment_method_val,
             required=True
         )
         self.use_case = discord.ui.TextInput(
             label="Personal/Commercial Use",
-            placeholder="e.g., ",
+            placeholder="Choose one only",
             default=use_case_val,
             required=True
         )
         self.content = discord.ui.TextInput(
             label="Content",
             style=discord.TextStyle.long,
-            placeholder="Describe your request here...",
+            placeholder="Describe your request here...\n Your request will be rejected if it is too explicit/NSFW",
             default=content_val,
             required=True
         )
