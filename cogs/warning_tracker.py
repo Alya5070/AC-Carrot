@@ -33,8 +33,8 @@ class WarningTracker(commands.Cog):
             # Add warning to database (saving message content)
             await database.add_warning(user.id, message.channel.id, message.id, message.content)
             
-            # Check warning count for the last 6 months
-            count = await database.get_warnings_count_last_6_months(user.id)
+            # Check warning count for the last 3 months
+            count = await database.get_warnings_count_last_3_months(user.id)
             
             # If 3 or more warnings, notify the staff commands channel
             if count >= 3 and commands_channel:
@@ -57,7 +57,7 @@ class WarningTracker(commands.Cog):
                 
                 warnings_str = "\n".join(formatted_warnings)
                 await commands_channel.send(
-                    f"{message.author.mention}, user {user.mention} has accumulated {count} verbal warning within 6 months. Please take immediate action.\n{warnings_str}"
+                    f"{message.author.mention}, user {user.mention} has accumulated {count} verbal warning within 3 months. Please take immediate action.\n{warnings_str}"
                 )
 
 async def setup(bot):

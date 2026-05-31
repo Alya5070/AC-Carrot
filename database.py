@@ -54,12 +54,12 @@ async def add_warning(user_id: int, channel_id: int, message_id: int, message_co
         ''', (user_id, channel_id, message_id, message_content))
         await db.commit()
 
-async def get_warnings_count_last_6_months(user_id: int) -> int:
+async def get_warnings_count_last_3_months(user_id: int) -> int:
     async with aiosqlite.connect(DB_NAME) as db:
-        # Check warnings in the last 6 months
+        # Check warnings in the last 3 months
         cursor = await db.execute('''
             SELECT COUNT(*) FROM warnings 
-            WHERE user_id = ? AND warned_at >= datetime('now', '-6 months')
+            WHERE user_id = ? AND warned_at >= datetime('now', '-3 months')
         ''', (user_id,))
         row = await cursor.fetchone()
         return row[0] if row else 0
@@ -67,10 +67,10 @@ async def get_warnings_count_last_6_months(user_id: int) -> int:
 async def get_last_3_warnings(user_id: int):
     async with aiosqlite.connect(DB_NAME) as db:
         db.row_factory = aiosqlite.Row
-        # Fetch the last 3 warnings within 6 months
+        # Fetch the last 3 warnings within 3 months
         cursor = await db.execute('''
             SELECT message_content, warned_at FROM warnings
-            WHERE user_id = ? AND warned_at >= datetime('now', '-6 months')
+            WHERE user_id = ? AND warned_at >= datetime('now', '-3 months')
             ORDER BY warned_at DESC
             LIMIT 3
         ''', (user_id,))
