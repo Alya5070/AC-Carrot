@@ -1,0 +1,113 @@
+import aiosqlite
+import os
+
+DB_NAME = "database.sqlite"
+
+async def init_db():
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS warnings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                warned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                channel_id INTEGER NOT NULL,
+                message_id INTEGER NOT NULL,
+                message_content TEXT
+            )
+        ''')
+        
+        # Safe migration if database already exists without message_content
+        try:
+            await db.execute('ALTER TABLE warnings ADD COLUMN message_content TEXT')
+            await db.commit()
+        except aiosqlite.OperationalError:
+            pass # Column already exists
+            
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS paid_requests (
+                request_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                budget TEXT NOT NULL,
+                sfw_nsfw TEXT NOT NULL,
+                payment_method TEXT NOT NULL,
+                use_case TEXT NOT NULL,
+                content TEXT NOT NULL,
+                status TEXT DEFAULT 'pending',
+                staff_review_msg_id INTEGER,
+                approved_msg_id INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        await db.commit()
+
+# --- Warning Tracker Methods ---
+
+async def add_warning(user_id: int, channel_id: int, message_id: int, message_content: str):
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute('''
+            INSERT INTO warnings (user_id, channel_id, message_id, message_content)
+            VALUES (?, ?, ?, ?)
+        ''', (user_id, channel_id, message_id, message_content))
+        await db.commit()
+
+async def get_warnings_count_last_6_months(user_id: int) -> int:
+    async with aiosqlite.connect(DB_NAME) as db:
+        # Check warnings in the last 6 months
+        cursor = await db.execute('''
+            SELECT COUNT(*) FROM warnings 
+            WHERE user_id = ? AND warned_at >= datetime('now', '-6 months')
+        ''', (user_id,))
+        row = await cursor.fetchone()
+        return row[0] if row else 0
+
+async def get_last_3_warnings(user_id: int):
+    async with aiosqlite.connect(DB_NAME) as db:
+        db.row_factory = aiosqlite.Row
+        # Fetch the last 3 warnings within 6 months
+        cursor = await db.execute('''
+            SELECT message_content, warned_at FROM warnings
+            WHERE user_id = ? AND warned_at >= datetime('now', '-6 months')
+            ORDER BY warned_at DESC
+            LIMIT 3
+        ''', (user_id,))
+        rows = await cursor.fetchall()
+        return [(row['message_content'], row['warned_at']) for row in rows if row['message_content']]
+
+# --- Paid Request Methods ---
+
+async def create_paid_request(user_id: int, budget: str, sfw_nsfw: str, payment_method: str, use_case: str, content: str) -> int:
+    async with aiosqlite.connect(DB_NAME) as db:
+        cursor = await db.execute('''
+            INSERT INTO paid_requests (user_id, budget, sfw_nsfw, payment_method, use_case, content)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (user_id, budget, sfw_nsfw, payment_method, use_case, content))
+        await db.commit()
+        return cursor.lastrowid
+
+async def get_paid_request(request_id: int):
+    async with aiosqlite.connect(DB_NAME) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute('SELECT * FROM paid_requests WHERE request_id = ?', (request_id,))
+        return await cursor.fetchone()
+
+async def update_paid_request_review_msg(request_id: int, msg_id: int):
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute('UPDATE paid_requests SET staff_review_msg_id = ? WHERE request_id = ?', (msg_id, request_id))
+        await db.commit()
+
+async def update_paid_request_status(request_id: int, status: str, approved_msg_id: int = None):
+    async with aiosqlite.connect(DB_NAME) as db:
+        if approved_msg_id:
+            await db.execute('UPDATE paid_requests SET status = ?, approved_msg_id = ? WHERE request_id = ?', (status, approved_msg_id, request_id))
+        else:
+            await db.execute('UPDATE paid_requests SET status = ? WHERE request_id = ?', (status, request_id))
+        await db.commit()
+
+async def update_paid_request_details(request_id: int, budget: str, sfw_nsfw: str, payment_method: str, use_case: str, content: str):
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute('''
+            UPDATE paid_requests 
+            SET budget = ?, sfw_nsfw = ?, payment_method = ?, use_case = ?, content = ? 
+            WHERE request_id = ?
+        ''', (budget, sfw_nsfw, payment_method, use_case, content, request_id))
+        await db.commit()
