@@ -111,3 +111,14 @@ async def update_paid_request_details(request_id: int, budget: str, sfw_nsfw: st
             WHERE request_id = ?
         ''', (budget, sfw_nsfw, payment_method, use_case, content, request_id))
         await db.commit()
+
+async def get_last_submitted_request(user_id: int):
+    async with aiosqlite.connect(DB_NAME) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute('''
+            SELECT * FROM paid_requests
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+        ''', (user_id,))
+        return await cursor.fetchone()
