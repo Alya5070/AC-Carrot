@@ -1,7 +1,11 @@
 import aiosqlite
 import os
 
-DB_NAME = "database.sqlite"
+# Use persistent /data directory if on Railway, otherwise fallback to local file
+if os.path.exists("/data") and os.access("/data", os.W_OK):
+    DB_NAME = "/data/database.sqlite"
+else:
+    DB_NAME = "database.sqlite"
 
 async def init_db():
     async with aiosqlite.connect(DB_NAME) as db:
