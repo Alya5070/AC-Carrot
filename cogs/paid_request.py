@@ -518,19 +518,22 @@ class PaidRequest(commands.Cog):
         if approved_channel and req['approved_msg_id']:
             try:
                 msg = await approved_channel.fetch_message(req['approved_msg_id'])
-                # Strikethrough the embed content
-                embed = msg.embeds[0]
-                embed.title = f"~~{embed.title}~~ [{action.upper()}]"
-                embed.color = discord.Color.dark_grey()
-                
-                # Apply strikethrough to all text fields
-                for i, field in enumerate(embed.fields):
-                    val = field.value
-                    if not val.startswith("~~"):
-                        embed.set_field_at(i, name=field.name, value=f"~~{val}~~", inline=field.inline)
-                        
-                await msg.edit(embed=embed)
-            except discord.NotFound:
+                if action == 'closed':
+                    await msg.delete()
+                else:  # fulfilled
+                    # Strikethrough the embed content
+                    embed = msg.embeds[0]
+                    embed.title = f"~~{embed.title}~~ [{action.upper()}]"
+                    embed.color = discord.Color.dark_grey()
+                    
+                    # Apply strikethrough to all text fields
+                    for i, field in enumerate(embed.fields):
+                        val = field.value
+                        if not val.startswith("~~"):
+                            embed.set_field_at(i, name=field.name, value=f"~~{val}~~", inline=field.inline)
+                            
+                    await msg.edit(embed=embed)
+            except (discord.NotFound, discord.HTTPException):
                 pass
 
         await database.update_paid_request_status(req_id, action)
