@@ -101,7 +101,7 @@
       ]
     },
     "advertising-menu": {
-      "text": "To start advertising in our server, you need the Art Seller role.",
+      "text": "To start advertising in our server, you need the Art Seller role.\n\nOnce you have the Art Seller role, we have prepared a few resources to aid you in advertising: \n 1. [How to write a good Terms of Services(ToS)](https://discord.com/channels/369798142289510401/1191922480961552424)\n2. [Understanding our server minimum of 15USD](https://discord.com/channels/369798142289510401/1393288825987665990/1476704977958469663)\n3. [Where to advertise](https://discord.com/channels/369798142289510401/1393288825987665990/1476704982807089162)",
       "buttons": [
         {
           "label": "How do I obtain Art Seller role?",
