@@ -28,11 +28,7 @@ class ChatbotButton(discord.ui.Button):
             if time_diff > 3600: # 1 hour
                 cog.sessions.pop(user_id, None)
                 try:
-                    await interaction.message.edit(
-                        content="Carrot waited too long so it went back for a re-fuel. Call Carrot back again by starting a chat (via the button) in https://discord.com/channels/1437362160211726452/1510898087353258076 again!",
-                        embed=None,
-                        view=None
-                    )
+                    await interaction.message.delete()
                 except Exception:
                     pass
                 await interaction.response.send_message("This session has expired due to inactivity. Please initiate a new chat from the server channel.", ephemeral=True)
@@ -117,6 +113,16 @@ class InitiateChatView(discord.ui.View):
         user = interaction.user
         await interaction.response.defer(ephemeral=True)
         
+        # If there's an existing session, delete its previous message to avoid clutter
+        old_session = self.cog.sessions.get(user.id)
+        if old_session:
+            old_msg = old_session.get("message")
+            if old_msg:
+                try:
+                    await old_msg.delete()
+                except Exception:
+                    pass
+        
         try:
             embed, view = self.cog.get_menu_embed_and_view("main_menu", user_id=user.id)
             msg = await user.send(embed=embed, view=view)
@@ -169,11 +175,7 @@ class Chatbot(commands.Cog):
                 msg = session.get("message")
                 if msg:
                     try:
-                        await msg.edit(
-                            content="Carrot waited too long so it went back for a re-fuel. Call Carrot back again by starting a chat (via the button) in https://discord.com/channels/1437362160211726452/1510898087353258076!",
-                            embed=None,
-                            view=None
-                        )
+                        await msg.delete()
                     except Exception:
                         pass # Ignore if DM was deleted or bot blocked
                         
