@@ -60,5 +60,46 @@ class WarningTracker(commands.Cog):
                     f"{message.author.mention}, user {user.mention} has accumulated {count} verbal warning within 3 months. Please take immediate action.\n{warnings_str}"
                 )
 
+    @commands.command()
+    @commands.has_permissions(administrator=True)
+    async def sync_warnings(self, ctx):
+        notice_channel = self.bot.get_channel(self.notice_channel_id)
+        if not notice_channel:
+            await ctx.send("Error: Could not access the staff notice channel. Please verify the ID.")
+            return
+
+        status_msg = await ctx.send("Starting warning history sync (last 3 months)... This may take a moment.")
+        
+        imported_count = 0
+        from datetime import timezone, datetime, timedelta
+        
+        # Fetch message history of the staff-notice channel from the last 3 months (90 days)
+        three_months_ago = datetime.now(timezone.utc) - timedelta(days=90)
+        async for message in notice_channel.history(limit=None, after=three_months_ago, oldest_first=True):
+            if message.author.bot:
+                continue
+            if not message.mentions:
+                continue
+                
+            warned_at_str = message.created_at.astimezone(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+            
+            for user in message.mentions:
+                if user.bot:
+                    continue
+                    
+                # Check if already imported
+                exists = await database.warning_exists(message.id, user.id)
+                if not exists:
+                    await database.add_warning(
+                        user.id, 
+                        message.channel.id, 
+                        message.id, 
+                        message.content, 
+                        warned_at=warned_at_str
+                    )
+                    imported_count += 1
+
+        await status_msg.edit(content=f"Sync complete! Imported {imported_count} historical warnings into the database.")
+
 async def setup(bot):
     await bot.add_cog(WarningTracker(bot))

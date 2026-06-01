@@ -46,13 +46,27 @@ async def init_db():
 
 # --- Warning Tracker Methods ---
 
-async def add_warning(user_id: int, channel_id: int, message_id: int, message_content: str):
+async def add_warning(user_id: int, channel_id: int, message_id: int, message_content: str, warned_at: str = None):
     async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute('''
-            INSERT INTO warnings (user_id, channel_id, message_id, message_content)
-            VALUES (?, ?, ?, ?)
-        ''', (user_id, channel_id, message_id, message_content))
+        if warned_at:
+            await db.execute('''
+                INSERT INTO warnings (user_id, channel_id, message_id, message_content, warned_at)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (user_id, channel_id, message_id, message_content, warned_at))
+        else:
+            await db.execute('''
+                INSERT INTO warnings (user_id, channel_id, message_id, message_content)
+                VALUES (?, ?, ?, ?)
+            ''', (user_id, channel_id, message_id, message_content))
         await db.commit()
+
+async def warning_exists(message_id: int, user_id: int) -> bool:
+    async with aiosqlite.connect(DB_NAME) as db:
+        cursor = await db.execute('''
+            SELECT 1 FROM warnings WHERE message_id = ? AND user_id = ?
+        ''', (message_id, user_id))
+        row = await cursor.fetchone()
+        return row is not None
 
 async def get_warnings_count_last_3_months(user_id: int) -> int:
     async with aiosqlite.connect(DB_NAME) as db:
