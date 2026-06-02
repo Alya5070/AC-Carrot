@@ -16,13 +16,29 @@ async def init_db():
                 warned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 channel_id INTEGER NOT NULL,
                 message_id INTEGER NOT NULL,
-                message_content TEXT
+                message_content TEXT,
+                staff_id INTEGER,
+                reason TEXT
             )
         ''')
         
         # Safe migration if database already exists without message_content
         try:
             await db.execute('ALTER TABLE warnings ADD COLUMN message_content TEXT')
+            await db.commit()
+        except aiosqlite.OperationalError:
+            pass # Column already exists
+
+        # Safe migration if database already exists without staff_id
+        try:
+            await db.execute('ALTER TABLE warnings ADD COLUMN staff_id INTEGER')
+            await db.commit()
+        except aiosqlite.OperationalError:
+            pass # Column already exists
+
+        # Safe migration if database already exists without reason
+        try:
+            await db.execute('ALTER TABLE warnings ADD COLUMN reason TEXT')
             await db.commit()
         except aiosqlite.OperationalError:
             pass # Column already exists
@@ -46,18 +62,18 @@ async def init_db():
 
 # --- Warning Tracker Methods ---
 
-async def add_warning(user_id: int, channel_id: int, message_id: int, message_content: str, warned_at: str = None):
+async def add_warning(user_id: int, channel_id: int, message_id: int, message_content: str, staff_id: int = None, reason: str = None, warned_at: str = None):
     async with aiosqlite.connect(DB_NAME) as db:
         if warned_at:
             await db.execute('''
-                INSERT INTO warnings (user_id, channel_id, message_id, message_content, warned_at)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (user_id, channel_id, message_id, message_content, warned_at))
+                INSERT INTO warnings (user_id, channel_id, message_id, message_content, staff_id, reason, warned_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (user_id, channel_id, message_id, message_content, staff_id, reason, warned_at))
         else:
             await db.execute('''
-                INSERT INTO warnings (user_id, channel_id, message_id, message_content)
-                VALUES (?, ?, ?, ?)
-            ''', (user_id, channel_id, message_id, message_content))
+                INSERT INTO warnings (user_id, channel_id, message_id, message_content, staff_id, reason)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (user_id, channel_id, message_id, message_content, staff_id, reason))
         await db.commit()
 
 async def warning_exists(message_id: int, user_id: int) -> bool:
@@ -78,6 +94,38 @@ async def get_warnings_count_last_3_months(user_id: int) -> int:
         row = await cursor.fetchone()
         return row[0] if row else 0
 
+async def get_warnings_count_last_30_days(user_id: int) -> int:
+    async with aiosqlite.connect(DB_NAME) as db:
+        # Check warnings in the last 30 days
+        cursor = await db.execute('''
+            SELECT COUNT(*) FROM warnings 
+            WHERE user_id = ? AND warned_at >= datetime('now', '-30 days')
+        ''', (user_id,))
+        row = await cursor.fetchone()
+        return row[0] if row else 0
+
+async def get_last_warning_staff_id_last_30_days(user_id: int):
+    async with aiosqlite.connect(DB_NAME) as db:
+        cursor = await db.execute('''
+            SELECT staff_id FROM warnings
+            WHERE user_id = ? AND staff_id IS NOT NULL AND warned_at >= datetime('now', '-30 days')
+            ORDER BY warned_at DESC
+            LIMIT 1
+        ''', (user_id,))
+        row = await cursor.fetchone()
+        return row[0] if row else None
+
+async def get_last_warning_staff_id_last_3_months(user_id: int):
+    async with aiosqlite.connect(DB_NAME) as db:
+        cursor = await db.execute('''
+            SELECT staff_id FROM warnings
+            WHERE user_id = ? AND staff_id IS NOT NULL AND warned_at >= datetime('now', '-3 months')
+            ORDER BY warned_at DESC
+            LIMIT 1
+        ''', (user_id,))
+        row = await cursor.fetchone()
+        return row[0] if row else None
+
 async def get_last_3_warnings(user_id: int):
     async with aiosqlite.connect(DB_NAME) as db:
         db.row_factory = aiosqlite.Row
@@ -90,6 +138,59 @@ async def get_last_3_warnings(user_id: int):
         ''', (user_id,))
         rows = await cursor.fetchall()
         return [(row['message_content'], row['warned_at']) for row in rows if row['message_content']]
+
+async def get_warnings_paginated(user_id: int, limit: int, offset: int):
+    async with aiosqlite.connect(DB_NAME) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute('''
+            SELECT id, warned_at, channel_id, message_id, message_content, staff_id, reason FROM warnings
+            WHERE user_id = ?
+            ORDER BY warned_at DESC
+            LIMIT ? OFFSET ?
+        ''', (user_id, limit, offset))
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+async def get_warnings_count(user_id: int) -> int:
+    async with aiosqlite.connect(DB_NAME) as db:
+        cursor = await db.execute('SELECT COUNT(*) FROM warnings WHERE user_id = ?', (user_id,))
+        row = await cursor.fetchone()
+        return row[0] if row else 0
+
+async def get_warning_by_id(warning_id: int):
+    async with aiosqlite.connect(DB_NAME) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute('SELECT * FROM warnings WHERE id = ?', (warning_id,))
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+async def delete_warning_by_id(warning_id: int) -> bool:
+    async with aiosqlite.connect(DB_NAME) as db:
+        cursor = await db.execute('SELECT 1 FROM warnings WHERE id = ?', (warning_id,))
+        exists = await cursor.fetchone()
+        if not exists:
+            return False
+        await db.execute('DELETE FROM warnings WHERE id = ?', (warning_id,))
+        await db.commit()
+        return True
+
+async def get_warnings_by_staff_paginated(staff_id: int, limit: int, offset: int):
+    async with aiosqlite.connect(DB_NAME) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute('''
+            SELECT id, user_id, warned_at, channel_id, message_id, message_content, reason FROM warnings
+            WHERE staff_id = ?
+            ORDER BY warned_at DESC
+            LIMIT ? OFFSET ?
+        ''', (staff_id, limit, offset))
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+async def get_warnings_by_staff_count(staff_id: int) -> int:
+    async with aiosqlite.connect(DB_NAME) as db:
+        cursor = await db.execute('SELECT COUNT(*) FROM warnings WHERE staff_id = ?', (staff_id,))
+        row = await cursor.fetchone()
+        return row[0] if row else 0
 
 # --- Paid Request Methods ---
 

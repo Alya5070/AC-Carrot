@@ -14,6 +14,7 @@ intents.message_content = True
 class ACCarrotBot(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix="!", intents=intents)
+        self.remove_command('help')
         
     async def setup_hook(self):
         # Initialize SQLite database
@@ -28,6 +29,16 @@ class ACCarrotBot(commands.Bot):
         
     async def on_ready(self):
         print(f"Logged in as {self.user} (ID: {self.user.id})")
+        try:
+            # Clear guild-specific commands to delete duplicates
+            for guild in self.guilds:
+                self.tree.clear_commands(guild=guild)
+                await self.tree.sync(guild=guild)
+            # Sync globally
+            synced = await self.tree.sync()
+            print(f"Synced {len(synced)} global commands and cleared guild caches.")
+        except Exception as e:
+            print(f"Error syncing commands: {e}")
         print("------")
 
 bot = ACCarrotBot()

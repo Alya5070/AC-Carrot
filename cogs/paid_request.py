@@ -4,6 +4,14 @@ import os
 import database
 from datetime import datetime
 
+def sanitize_input(text: str, max_len: int = 1000) -> str:
+    if not text:
+        return ""
+    text = text.replace("@everyone", "@\u200beveryone").replace("@here", "@\u200bhere")
+    if len(text) > max_len:
+        text = text[:max_len] + "..."
+    return text
+
 class PaidRequestModal(discord.ui.Modal):
     def __init__(self, request_id: int = None, budget_val: str = None, sfw_nsfw_val: str = None,
                  payment_method_val: str = None, use_case_val: str = None, content_val: str = None,
@@ -19,32 +27,37 @@ class PaidRequestModal(discord.ui.Modal):
             label="Budget (AUD/USD/CAD/etc.)",
             placeholder="Crypto/Robux is NOT ALLOWED",
             default=budget_val,
-            required=True
+            required=True,
+            max_length=100
         )
         self.sfw_nsfw = discord.ui.TextInput(
             label="SFW/NSFW",
             placeholder="Choose one only",
             default=sfw_nsfw_val,
-            required=True
+            required=True,
+            max_length=50
         )
         self.payment_method = discord.ui.TextInput(
             label="Payment Method",
             placeholder="Cryto/Robux/Royalty is NOT ALLOWED",
             default=payment_method_val,
-            required=True
+            required=True,
+            max_length=100
         )
         self.use_case = discord.ui.TextInput(
             label="Personal/Commercial Use",
             placeholder="Choose one only",
             default=use_case_val,
-            required=True
+            required=True,
+            max_length=50
         )
         self.content = discord.ui.TextInput(
             label="Content",
             style=discord.TextStyle.long,
             placeholder="Your request will be rejected if it is too explicit/NSFW or unclear/vague",
             default=content_val,
-            required=True
+            required=True,
+            max_length=1000
         )
         
         self.add_item(self.budget)
@@ -57,25 +70,30 @@ class PaidRequestModal(discord.ui.Modal):
         await interaction.response.defer(ephemeral=True)
         
         is_edit = self.request_id is not None
+        budget_val = sanitize_input(self.budget.value, 100)
+        sfw_nsfw_val = sanitize_input(self.sfw_nsfw.value, 50)
+        payment_method_val = sanitize_input(self.payment_method.value, 100)
+        use_case_val = sanitize_input(self.use_case.value, 50)
+        content_val = sanitize_input(self.content.value, 1000)
         
         if is_edit:
             req_id = self.request_id
             await database.update_paid_request_details(
                 req_id,
-                self.budget.value,
-                self.sfw_nsfw.value,
-                self.payment_method.value,
-                self.use_case.value,
-                self.content.value
+                budget_val,
+                sfw_nsfw_val,
+                payment_method_val,
+                use_case_val,
+                content_val
             )
         else:
             req_id = await database.create_paid_request(
                 interaction.user.id,
-                self.budget.value,
-                self.sfw_nsfw.value,
-                self.payment_method.value,
-                self.use_case.value,
-                self.content.value
+                budget_val,
+                sfw_nsfw_val,
+                payment_method_val,
+                use_case_val,
+                content_val
             )
 
         # Fetch member from the review channel guild to support DMs
@@ -175,7 +193,8 @@ class RejectReasonModal(discord.ui.Modal, title="Reason for Rejection"):
         label="Reason",
         style=discord.TextStyle.long,
         placeholder="Please provide a reason for rejecting this request...",
-        required=True
+        required=True,
+        max_length=500
     )
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -183,6 +202,7 @@ class RejectReasonModal(discord.ui.Modal, title="Reason for Rejection"):
         await database.update_paid_request_status(self.request_id, 'rejected')
         
         req = await database.get_paid_request(self.request_id)
+        reason_val = sanitize_input(self.reason.value, 500)
         
         # Fetch submitter
         submitter = interaction.client.get_user(self.user_id)
@@ -214,7 +234,7 @@ class RejectReasonModal(discord.ui.Modal, title="Reason for Rejection"):
             )
             log_embed.add_field(name="Request From", value=submitter_str, inline=False)
             log_embed.add_field(name="Rejected By", value=f"{interaction.user.name} [{interaction.user.id}]", inline=False)
-            log_embed.add_field(name="Reason", value=self.reason.value, inline=False)
+            log_embed.add_field(name="Reason", value=reason_val, inline=False)
             
             now_str = datetime.now().strftime('%d %B %Y %H:%M')
             log_embed.add_field(name="Timestamp", value=f"`{now_str}`", inline=False)
@@ -280,7 +300,7 @@ class RejectReasonModal(discord.ui.Modal, title="Reason for Rejection"):
             embed1.add_field(name="ID", value=str(self.request_id), inline=False)
             
             embed2 = discord.Embed(
-                description=f"One of your requests has been rejected for the following reason: **{self.reason.value}**",
+                description=f"One of your requests has been rejected for the following reason: **{reason_val}**",
                 color=discord.Color.blue()
             )
             
