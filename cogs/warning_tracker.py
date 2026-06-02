@@ -325,7 +325,7 @@ class HelpPaginationView(discord.ui.View):
                 "fields": [
                     ("!setup_paid_requests", "Sends the persistent 'Create Request' embed/button to the configured paid requests channel.", False),
                     ("!chatbot_setup_channel", "Sends the persistent 'Start Chat' chatbot embed/button to the configured channel.", False),
-                    ("!help", "Show this paginated help menu.", False)
+                    ("!carrothelp", "Show this paginated help menu.", False)
                 ]
             }
         ]
@@ -733,7 +733,7 @@ class WarningTracker(commands.Cog):
 
         await status_msg.edit(content=f"Sync complete! Imported {imported_count} historical verbal notices into the database.")
 
-    @commands.command(name="help")
+    @commands.command(name="carrothelp")
     async def help_command(self, ctx):
         view = HelpPaginationView()
         embed = view.get_page_embed()
