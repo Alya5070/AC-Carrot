@@ -30,14 +30,14 @@ class ACCarrotBot(commands.Bot):
     async def on_ready(self):
         print(f"Logged in as {self.user} (ID: {self.user.id})")
         try:
-            # Sync globally
-            await self.tree.sync()
-            
-            # Copy global commands to all guilds for instant local availability
+            # Clear guild-specific commands to remove previous duplicates
             for guild in self.guilds:
-                self.tree.copy_global_to(guild=guild)
-                synced = await self.tree.sync(guild=guild)
-                print(f"Synced {len(synced)} commands instantly to guild: {guild.name} ({guild.id})")
+                self.tree.clear_commands(guild=guild)
+                await self.tree.sync(guild=guild)
+                
+            # Sync globally (so the command only exists once)
+            synced = await self.tree.sync()
+            print(f"Synced {len(synced)} global application commands.")
         except Exception as e:
             print(f"Error syncing commands: {e}")
         print("------")
