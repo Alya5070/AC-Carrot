@@ -522,7 +522,7 @@ class WarningTracker(commands.Cog):
                         all_attachments.extend(snapshot.attachments)
 
             if all_attachments:
-                attachments_list = "\n".join([f"[📎 {a.filename}]({a.url})" for a in all_attachments])
+                attachments_list = "\n".join([a.url for a in all_attachments])
                 log_embed.add_field(name="Attachments", value=attachments_list, inline=False)
                 
             try:
@@ -544,7 +544,7 @@ class WarningTracker(commands.Cog):
                     all_attachments.extend(snapshot.attachments)
 
         if all_attachments:
-            attachments_str = "\n**Attachments:**\n" + "\n".join([f"- [📎 {a.filename}]({a.url})" for a in all_attachments])
+            attachments_str = "\n**Attachments:**\n" + "\n".join([f"- [{a.filename}]({a.url})" for a in all_attachments])
             db_reason += attachments_str
         
         await database.add_warning(
