@@ -58,6 +58,35 @@ async def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
+        
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS reaction_roles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                message_id INTEGER NOT NULL,
+                guild_id INTEGER NOT NULL,
+                emoji TEXT NOT NULL,
+                role_id INTEGER NOT NULL
+            )
+        ''')
+        
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS dropdown_menus (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                message_id INTEGER NOT NULL,
+                placeholder TEXT NOT NULL,
+                row_index INTEGER NOT NULL
+            )
+        ''')
+        
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS dropdown_options (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                menu_id INTEGER NOT NULL,
+                label TEXT NOT NULL,
+                emoji TEXT,
+                role_id INTEGER NOT NULL
+            )
+        ''')
         await db.commit()
 
 # --- Warning Tracker Methods ---
@@ -241,3 +270,80 @@ async def get_last_submitted_request(user_id: int):
             LIMIT 1
         ''', (user_id,))
         return await cursor.fetchone()
+
+# --- Reaction Roles Methods ---
+
+async def add_reaction_role(message_id: int, guild_id: int, emoji: str, role_id: int):
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute('''
+            INSERT INTO reaction_roles (message_id, guild_id, emoji, role_id)
+            VALUES (?, ?, ?, ?)
+        ''', (message_id, guild_id, emoji, role_id))
+        await db.commit()
+
+async def get_reaction_roles_for_message(message_id: int):
+    async with aiosqlite.connect(DB_NAME) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute('SELECT * FROM reaction_roles WHERE message_id = ?', (message_id,))
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+async def delete_reaction_roles_for_message(message_id: int):
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute('DELETE FROM reaction_roles WHERE message_id = ?', (message_id,))
+        await db.commit()
+
+async def remove_reaction_role(message_id: int, emoji: str, role_id: int):
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute('''
+            DELETE FROM reaction_roles 
+            WHERE message_id = ? AND emoji = ? AND role_id = ?
+        ''', (message_id, emoji, role_id))
+        await db.commit()
+
+# --- Dropdown Roles Methods ---
+
+async def add_dropdown_menu(message_id: int, placeholder: str, row_index: int) -> int:
+    async with aiosqlite.connect(DB_NAME) as db:
+        cursor = await db.execute('''
+            INSERT INTO dropdown_menus (message_id, placeholder, row_index)
+            VALUES (?, ?, ?)
+        ''', (message_id, placeholder, row_index))
+        await db.commit()
+        return cursor.lastrowid
+
+async def add_dropdown_option(menu_id: int, label: str, emoji: str, role_id: int):
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute('''
+            INSERT INTO dropdown_options (menu_id, label, emoji, role_id)
+            VALUES (?, ?, ?, ?)
+        ''', (menu_id, label, emoji, role_id))
+        await db.commit()
+
+async def get_dropdowns_for_message(message_id: int):
+    async with aiosqlite.connect(DB_NAME) as db:
+        db.row_factory = aiosqlite.Row
+        
+        # Get menus
+        cursor = await db.execute('SELECT * FROM dropdown_menus WHERE message_id = ? ORDER BY row_index ASC', (message_id,))
+        menus = [dict(row) for row in await cursor.fetchall()]
+        
+        # Get options for each menu
+        for menu in menus:
+            cursor = await db.execute('SELECT * FROM dropdown_options WHERE menu_id = ?', (menu['id'],))
+            menu['options'] = [dict(row) for row in await cursor.fetchall()]
+            
+        return menus
+
+async def delete_dropdowns_for_message(message_id: int):
+    async with aiosqlite.connect(DB_NAME) as db:
+        # First find menus
+        cursor = await db.execute('SELECT id FROM dropdown_menus WHERE message_id = ?', (message_id,))
+        menus = await cursor.fetchall()
+        
+        for (menu_id,) in menus:
+            await db.execute('DELETE FROM dropdown_options WHERE menu_id = ?', (menu_id,))
+            
+        await db.execute('DELETE FROM dropdown_menus WHERE message_id = ?', (message_id,))
+        await db.commit()
+
