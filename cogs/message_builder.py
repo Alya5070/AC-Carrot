@@ -435,15 +435,19 @@ class MessageBuilder(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.ctx_menu = app_commands.ContextMenu(name="Edit Bot Message", callback=self.edit_bot_message_ctx)
-        self.ctx_menu.default_permissions = discord.Permissions(administrator=True)
         self.bot.tree.add_command(self.ctx_menu)
 
     def cog_unload(self):
         self.bot.tree.remove_command(self.ctx_menu.name, type=self.ctx_menu.type)
 
     @app_commands.command(name="message_builder", description="Open interactive Webhook message builder")
-    @app_commands.default_permissions(administrator=True)
     async def message_builder(self, interaction: discord.Interaction):
+        # Allow administrators OR the specific superuser
+        is_admin = interaction.user.guild_permissions.administrator if interaction.guild else False
+        if not (is_admin or interaction.user.id == 255174440005009408):
+            await interaction.response.send_message("❌ You do not have permission to use this command.", ephemeral=True)
+            return
+
         view = BuilderControlView(self)
         kwargs, info = view.get_preview_kwargs()
         await interaction.response.send_message(
@@ -453,6 +457,12 @@ class MessageBuilder(commands.Cog):
         view.preview_message = await interaction.original_response()
 
     async def edit_bot_message_ctx(self, interaction: discord.Interaction, message: discord.Message):
+        # Allow administrators OR the specific superuser
+        is_admin = interaction.user.guild_permissions.administrator if interaction.guild else False
+        if not (is_admin or interaction.user.id == 255174440005009408):
+            await interaction.response.send_message("❌ You do not have permission to use this command.", ephemeral=True)
+            return
+
         if message.author.id != self.bot.user.id:
             await interaction.response.send_message("You can only edit messages sent by this bot.", ephemeral=True)
             return
