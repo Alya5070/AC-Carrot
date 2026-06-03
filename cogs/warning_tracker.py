@@ -504,7 +504,7 @@ class WarningTracker(commands.Cog):
             )
             
             if message.attachments:
-                attachments_list = "\n".join([a.url for a in message.attachments])
+                attachments_list = "\n".join([f"[{a.filename}]({a.url})" for a in message.attachments])
                 log_embed.add_field(name="Attachments", value=attachments_list, inline=False)
                 
             try:
@@ -516,10 +516,10 @@ class WarningTracker(commands.Cog):
         warn_channel_id = self.log_channel_id if log_msg else (self.notice_channel_id if notice_msg else message.channel.id)
         warn_message_id = log_msg.id if log_msg else (notice_msg.id if notice_msg else 0)
         
-        # Format attachments as plain links (wrapped in <> to prevent previews) and append to reason
+        # Format attachments as clean markdown links and append to reason
         db_reason = reason
         if message.attachments:
-            attachments_str = "\n**Attachments:**\n" + "\n".join([f"- <{a.url}>" for a in message.attachments])
+            attachments_str = "\n**Attachments:**\n" + "\n".join([f"- [{a.filename}]({a.url})" for a in message.attachments])
             db_reason += attachments_str
         
         await database.add_warning(
