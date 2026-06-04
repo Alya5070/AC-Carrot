@@ -70,6 +70,10 @@ class RemovalReasonSelect(discord.ui.Select):
             discord.SelectOption(label="Incomplete ToS", value="incomplete_tos"),
             discord.SelectOption(label="Advertising in wrong channel", value="wrong_channel"),
             discord.SelectOption(label="Advertising in wrong channel + no art seller", value="wrong_channel_no_seller"),
+            discord.SelectOption(label="Incorrect channel - YCH", value="incorrect_channel_ych"),
+            discord.SelectOption(label="Incorrect channel - Adoptables", value="incorrect_channel_adoptables"),
+            discord.SelectOption(label="Incorrect channel - General/Showcase", value="incorrect_channel_general"),
+            discord.SelectOption(label="Chatting in daily wins", value="chatting_daily_wins"),
             discord.SelectOption(label="Others...", value="others")
         ]
         super().__init__(placeholder="Select reason(s) for removal...", options=options, min_values=1, max_values=len(options))
@@ -80,12 +84,16 @@ class RemovalReasonSelect(discord.ui.Select):
             return
 
         reasons_map = {
-            "pricing_below_min": "pricing below our [server minimum of 15USD](https://discord.com/channels/369798142289510401/492328409175687179/1481767967103389727)",
-            "no_visible_pricing": "lack of [visible pricing](https://discord.com/channels/369798142289510401/492328409175687179/1481767967103389727) on your post",
-            "no_tos_mention": "a lack of visible [Terms of Services(ToS)](https://discord.com/channels/369798142289510401/1191922480961552424) nor does your post indicate anywhere where it can be found",
-            "incomplete_tos": "an incomplete Terms of Services(ToS) (please read [this guide](https://discord.com/channels/369798142289510401/1191922480961552424) to know what should be included in your ToS)",
-            "wrong_channel": "advertising outside of the designated [commissions channel](https://discord.com/channels/369798142289510401/1393271200729268294/1476738957826850868)",
-            "wrong_channel_no_seller": "advertising outside of the designated commissions channel and without Art Seller role (read https://discord.com/channels/369798142289510401/635030026911481856 on how to obtain it)"
+            "pricing_below_min": "pricing below our server minimum of 15USD per character, __including__ extras. Please refer to [Commission Rule 2.4](https://discord.com/channels/369798142289510401/492328409175687179/1481767967103389727), and refer to our [Commission Guide](https://discord.com/channels/369798142289510401/1393288825987665990/1476704977958469663) for more information.",
+            "no_visible_pricing": "lack of visible pricing in your post. Be it through text or image, pricing per service offered must be visible in your post according to [Rule 2.1](https://discord.com/channels/369798142289510401/492328409175687179/1481767967103389727).\n-# More info can also be found in the pinned messages of this channel.",
+            "no_tos_mention": "not having your Terms of Service linked or displayed properly, or indicated as to where it can be found. Please refer to [Rule 2.1](https://discord.com/channels/369798142289510401/492328409175687179/1481767967103389727).\n-# Note: If not directly displayed in your post; you __must__ state where your terms can be found, such as in a specific link or website. Buyers should not have to message you for additional information.",
+            "incomplete_tos": "insufficient information in your Terms of Service. Please keep in mind that __ALL__ of the following sections must be included __and__ elaborated on, based on **[Rule 2.1](https://discord.com/channels/369798142289510401/492328409175687179/1324496338985029662)**: \n> Offers, Specified commission rights for seller and buyer, Payment method, Refund policy, and Contact.\nPlease read through the <#492328409175687179> before posting, and visit our [TOS Guide](https://discord.com/channels/369798142289510401/1191922480961552424/1191922480961552424) for examples on how to elaborate.\n-# Please explicitly mention \"Terms of Service\" in your post rather than just listing your terms.",
+            "wrong_channel": "advertising outside of the designated commissions channel. Please ensure your post does not contain any form of advertising. Refer to our [Local Rules](https://discord.com/channels/369798142289510401/1393271200729268294/1476738956396597290) per channel for more information.",
+            "wrong_channel_no_seller": "advertising outside of the designated [commissions channels](https://discord.com/channels/369798142289510401/1393271200729268294/1476738956396597290) and without the Art Seller role. Please refer [here](https://discord.com/channels/369798142289510401/635030026911481856/1490007480955179180) for information on how to the obtain the Art Seller role.",
+            "incorrect_channel_ych": "as YCHs should be posted to <#954410702980915200> instead. Please make sure to share your advertisement posts to the proper channels.",
+            "incorrect_channel_adoptables": "as adoptables should be posted to <#473486131158319125> instead. Please make sure to share your advertisement posts to the proper channels.",
+            "incorrect_channel_general": "as it is not the place to advertise commissions. Please make sure to share your advertisement posts to the proper channels.",
+            "chatting_daily_wins": "as the <#873116269640036362> channel is only for __posting__ positive achievements and cannot be used for chatting. To respond to someone's daily win, please use only reaction emotes."
         }
 
         if "others" in self.values:
@@ -94,7 +102,11 @@ class RemovalReasonSelect(discord.ui.Select):
             await interaction.response.send_modal(modal)
         else:
             if len(self.values) == 1:
-                reason = f"Your post has been removed from {self.target_message.channel.mention} due to {reasons_map[self.values[0]]}."
+                selected_reason = reasons_map[self.values[0]]
+                if selected_reason.startswith("as "):
+                    reason = f"Your post has been removed from {self.target_message.channel.mention} {selected_reason}"
+                else:
+                    reason = f"Your post has been removed from {self.target_message.channel.mention} due to {selected_reason}"
             else:
                 formatted_list = "\n".join([f"- {reasons_map[v]}" for v in self.values if v in reasons_map])
                 reason = f"Your post has been removed from {self.target_message.channel.mention} due to:\n{formatted_list}"
