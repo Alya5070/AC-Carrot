@@ -486,21 +486,49 @@ class WarningTracker(commands.Cog):
                 print(f"Error sending notice message: {e}")
 
         # Log it in staff log channel
+        # Add warning to database (reference the staff notice message so delverbal works)
+        warn_channel_id = self.notice_channel_id if notice_msg else message.channel.id
+        warn_message_id = notice_msg.id if notice_msg else 0
+        
+        # Format attachments as clean markdown links and append to reason
+        db_reason = reason
+        all_attachments = list(message.attachments)
+        if hasattr(message, "message_snapshots") and message.message_snapshots:
+            for snapshot in message.message_snapshots:
+                if hasattr(snapshot, "attachments") and snapshot.attachments:
+                    all_attachments.extend(snapshot.attachments)
+
+        if all_attachments:
+            attachments_str = "\n**Attachments:**\n" + "\n".join([f"- [{a.filename}]({a.url})" for a in all_attachments])
+            db_reason += attachments_str
+        
+        warn_id = await database.add_warning(
+            user_id=message.author.id,
+            channel_id=warn_channel_id,
+            message_id=warn_message_id,
+            message_content=db_reason,
+            staff_id=interaction.user.id,
+            reason=db_reason
+        )
+
+        # Log it in staff log channel
         log_channel = self.bot.get_channel(self.log_channel_id)
         if not log_channel:
             try:
                 log_channel = await asyncio.wait_for(self.bot.fetch_channel(self.log_channel_id), timeout=5.0)
             except Exception:
                 pass
-
-        log_msg = None
-        if log_channel:
+        
+        if not log_channel:
+            await interaction.followup.send(f"Warning: Could not fetch the log channel ({self.log_channel_id}). Please check bot permissions and channel ID.", ephemeral=True)
+        else:
             orig_ts = int(message.created_at.timestamp())
             del_ts = int(datetime.now(timezone.utc).timestamp())
             log_embed = discord.Embed(
                 title="Log: Post Removed",
                 color=discord.Color.orange()
             )
+            log_embed.add_field(name="Warning ID", value=f"#{warn_id}", inline=False)
             log_embed.add_field(name="Staff Member", value=f"{interaction.user.mention} ({interaction.user.id})", inline=True)
             log_embed.add_field(name="Original Author", value=f"{message.author.mention} ({message.author.id})", inline=True)
             log_embed.add_field(name="Channel", value=message.channel.mention, inline=True)
@@ -529,47 +557,17 @@ class WarningTracker(commands.Cog):
                 inline=False
             )
             
-            # Collect attachments including forwarded ones
-            all_attachments = list(message.attachments)
-            if hasattr(message, "message_snapshots") and message.message_snapshots:
-                for snapshot in message.message_snapshots:
-                    if hasattr(snapshot, "attachments") and snapshot.attachments:
-                        all_attachments.extend(snapshot.attachments)
-
             if all_attachments:
                 attachments_list = "\n".join([a.url for a in all_attachments])
+                if len(attachments_list) > 1024:
+                    attachments_list = attachments_list[:1020] + "..."
                 log_embed.add_field(name="Attachments", value=attachments_list, inline=False)
                 
             try:
-                log_msg = await log_channel.send(embed=log_embed)
+                await log_channel.send(embed=log_embed)
             except Exception as e:
+                await interaction.followup.send(f"Warning: Failed to send log embed: {e}", ephemeral=True)
                 print(f"Error sending log embed: {e}")
-
-        # Add warning to database (reference the staff notice message so delverbal works)
-        warn_channel_id = self.notice_channel_id if notice_msg else message.channel.id
-        warn_message_id = notice_msg.id if notice_msg else 0
-        
-        # Format attachments as clean markdown links and append to reason
-        db_reason = reason
-        # Re-resolve all_attachments for database as well
-        all_attachments = list(message.attachments)
-        if hasattr(message, "message_snapshots") and message.message_snapshots:
-            for snapshot in message.message_snapshots:
-                if hasattr(snapshot, "attachments") and snapshot.attachments:
-                    all_attachments.extend(snapshot.attachments)
-
-        if all_attachments:
-            attachments_str = "\n**Attachments:**\n" + "\n".join([f"- [{a.filename}]({a.url})" for a in all_attachments])
-            db_reason += attachments_str
-        
-        await database.add_warning(
-            user_id=message.author.id,
-            channel_id=warn_channel_id,
-            message_id=warn_message_id,
-            message_content=db_reason,
-            staff_id=interaction.user.id,
-            reason=db_reason
-        )
 
         await interaction.followup.send("Post successfully removed, logged, and verbal notice recorded.", ephemeral=True)
 

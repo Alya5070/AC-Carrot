@@ -94,16 +94,17 @@ async def init_db():
 async def add_warning(user_id: int, channel_id: int, message_id: int, message_content: str, staff_id: int = None, reason: str = None, warned_at: str = None):
     async with aiosqlite.connect(DB_NAME) as db:
         if warned_at:
-            await db.execute('''
+            cursor = await db.execute('''
                 INSERT INTO warnings (user_id, channel_id, message_id, message_content, staff_id, reason, warned_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             ''', (user_id, channel_id, message_id, message_content, staff_id, reason, warned_at))
         else:
-            await db.execute('''
+            cursor = await db.execute('''
                 INSERT INTO warnings (user_id, channel_id, message_id, message_content, staff_id, reason)
                 VALUES (?, ?, ?, ?, ?, ?)
             ''', (user_id, channel_id, message_id, message_content, staff_id, reason))
         await db.commit()
+        return cursor.lastrowid
 
 async def warning_exists(message_id: int, user_id: int) -> bool:
     async with aiosqlite.connect(DB_NAME) as db:
