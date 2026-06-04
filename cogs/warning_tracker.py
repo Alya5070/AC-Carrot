@@ -463,7 +463,10 @@ class WarningTracker(commands.Cog):
         try:
             await message.delete()
         except discord.HTTPException as e:
-            await interaction.followup.send(f"Failed to delete the message: {e}", ephemeral=True)
+            err_msg = f"Failed to delete the message: {e}"
+            if e.code == 50013:
+                err_msg += "\n\n**Note:** This means the *bot itself* is missing the `Manage Messages` permission in this channel. Even as a superuser, the bot still needs Discord permissions to delete other users' messages!"
+            await interaction.followup.send(err_msg, ephemeral=True)
             return
 
         # Post warning in #staff-notice (748949267397476392)
