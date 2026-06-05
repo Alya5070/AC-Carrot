@@ -109,3 +109,5 @@ database.sqlite-journal
 
 # Local Environment configurations
 .env
+ 
+ *rules.md
