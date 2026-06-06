@@ -479,7 +479,10 @@ class WarningTracker(commands.Cog):
         if notice_channel:
             try:
                 allowed_mentions = discord.AllowedMentions(everyone=False, roles=False, users=True)
-                notice_msg = await notice_channel.send(content=f"{message.author.mention} {reason}", allowed_mentions=allowed_mentions)
+                notice_content = f"{message.author.mention} {reason}"
+                if len(notice_content) > 2000:
+                    notice_content = notice_content[:1997] + "..."
+                notice_msg = await notice_channel.send(content=notice_content, allowed_mentions=allowed_mentions)
             except Exception as e:
                 print(f"Error sending notice message: {e}")
 
@@ -532,7 +535,11 @@ class WarningTracker(commands.Cog):
             log_embed.add_field(name="Channel", value=message.channel.mention, inline=True)
             log_embed.add_field(name="Original Post Created At", value=f"<t:{orig_ts}:f> (<t:{orig_ts}:R>)", inline=True)
             log_embed.add_field(name="Post Deleted At", value=f"<t:{del_ts}:f> (<t:{del_ts}:R>)", inline=True)
-            log_embed.add_field(name="Rejection Reason", value=reason, inline=False)
+            
+            reason_text = reason
+            if len(reason_text) > 1024:
+                reason_text = reason_text[:1021] + "..."
+            log_embed.add_field(name="Rejection Reason", value=reason_text, inline=False)
             
             # Extract text content (checking snapshots for forwarded messages)
             content_snippet = original_content
