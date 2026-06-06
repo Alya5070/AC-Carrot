@@ -64,16 +64,15 @@ class RemovalReasonSelect(discord.ui.Select):
         self.target_message = target_message
         self.cog = cog
         options = [
-            discord.SelectOption(label="Pricing below server minimum", value="pricing_below_min"),
-            discord.SelectOption(label="Lack of visible pricing", value="no_visible_pricing"),
+            discord.SelectOption(label="Underpricing", value="underpricing"),
+            discord.SelectOption(label="Lack of visible pricing and examples", value="no_visible_pricing"),
             discord.SelectOption(label="Lack of/No mentions of ToS", value="no_tos_mention"),
             discord.SelectOption(label="Incomplete ToS", value="incomplete_tos"),
             discord.SelectOption(label="Advertising in wrong channel", value="wrong_channel"),
-            discord.SelectOption(label="Advertising in wrong channel + no art seller", value="wrong_channel_no_seller"),
-            discord.SelectOption(label="Incorrect channel - YCH", value="incorrect_channel_ych"),
-            discord.SelectOption(label="Incorrect channel - Adoptables", value="incorrect_channel_adoptables"),
-            discord.SelectOption(label="Incorrect channel - General/Showcase", value="incorrect_channel_general"),
-            discord.SelectOption(label="Chatting in daily wins", value="chatting_daily_wins"),
+            discord.SelectOption(label="Advertising in wrong channel + no role", value="wrong_channel_no_role"),
+            discord.SelectOption(label="Chatting in daily w", value="chatting_daily_wins"),
+            discord.SelectOption(label="Critique format", value="critique_format"),
+            discord.SelectOption(label="Art in chats", value="art_in_chats"),
             discord.SelectOption(label="Others...", value="others")
         ]
         super().__init__(placeholder="Select reason(s) for removal...", options=options, min_values=1, max_values=len(options))
@@ -84,16 +83,15 @@ class RemovalReasonSelect(discord.ui.Select):
             return
 
         reasons_map = {
-            "pricing_below_min": "pricing below our server minimum of 15USD per character, __including__ extras. Please refer to [Commission Rule 2.4](https://discord.com/channels/369798142289510401/492328409175687179/1481767967103389727), and refer to our [Commission Guide](https://discord.com/channels/369798142289510401/1393288825987665990/1476704977958469663) for more information.",
-            "no_visible_pricing": "lack of visible pricing in your post. Be it through text or image, pricing per service offered must be visible in your post according to [Rule 2.1](https://discord.com/channels/369798142289510401/492328409175687179/1481767967103389727).\n-# More info can also be found in the pinned messages of this channel.",
-            "no_tos_mention": "not having your Terms of Service linked or displayed properly, or indicated as to where it can be found. Please refer to [Rule 2.1](https://discord.com/channels/369798142289510401/492328409175687179/1481767967103389727).\n-# Note: If not directly displayed in your post; you __must__ state where your terms can be found, such as in a specific link or website. Buyers should not have to message you for additional information.",
-            "incomplete_tos": "insufficient information in your Terms of Service. Please keep in mind that __ALL__ of the following sections must be included __and__ elaborated on, based on **[Rule 2.1](https://discord.com/channels/369798142289510401/492328409175687179/1324496338985029662)**: \n> Offers, Specified commission rights for seller and buyer, Payment method, Refund policy, and Contact.\nPlease read through the <#492328409175687179> before posting, and visit our [TOS Guide](https://discord.com/channels/369798142289510401/1191922480961552424/1191922480961552424) for examples on how to elaborate.\n-# Please explicitly mention \"Terms of Service\" in your post rather than just listing your terms.",
-            "wrong_channel": "advertising outside of the designated commissions channel. Please ensure your post does not contain any form of advertising. Refer to our [Local Rules](https://discord.com/channels/369798142289510401/1393271200729268294/1476738956396597290) per channel for more information.",
-            "wrong_channel_no_seller": "advertising outside of the designated [commissions channels](https://discord.com/channels/369798142289510401/1393271200729268294/1476738956396597290) and without the Art Seller role. Please refer [here](https://discord.com/channels/369798142289510401/635030026911481856/1490007480955179180) for information on how to the obtain the Art Seller role.",
-            "incorrect_channel_ych": "as YCHs should be posted to <#954410702980915200> instead. Please make sure to share your advertisement posts to the proper channels.",
-            "incorrect_channel_adoptables": "as adoptables should be posted to <#473486131158319125> instead. Please make sure to share your advertisement posts to the proper channels.",
-            "incorrect_channel_general": "as it is not the place to advertise commissions. Please make sure to share your advertisement posts to the proper channels.",
-            "chatting_daily_wins": "as the <#873116269640036362> channel is only for __posting__ positive achievements and cannot be used for chatting. To respond to someone's daily win, please use only reaction emotes."
+            "underpricing": "due to pricing below our server minimum of 15USD __per__ character, *or* below the server minimum of 5USD per 100 words for writing. Please refer to [Rule 2.4](https://discord.com/channels/369798142289510401/492328409175687179/1481767967103389727), and visit our [Commission Guide](https://discord.com/channels/369798142289510401/1393288825987665990/1476704977958469663) for more information.\n-# Note: Extra characters must also meet the server minimum of 15USD. Additionally, your post will be taken down if it has no specified currency, or uses one that is under the server minimum when converted.",
+            "no_visible_pricing": "due to a lack of visible pricing and/or offer examples in your post. Be it through written text or images; offer examples, TOS, and pricing per service offered __must__ be visible in your post according to [Rule 2.1](https://discord.com/channels/369798142289510401/492328409175687179/1481767967103389727).\n-# Note: Refer to our [Local Rules](https://discord.com/channels/369798142289510401/1393271200729268294/1476738956396597290) per channel for more information.",
+            "no_tos_mention": "due to not having your Terms of Service linked or displayed properly, or indicated as to where they can be found. Refer to [Rule 2.1](https://discord.com/channels/369798142289510401/492328409175687179/1481767967103389727), read through the <#492328409175687179> before posting, and visit our [TOS Guide](https://discord.com/channels/369798142289510401/1191922480961552424/1191922480961552424) for examples on how your terms should be written.\n-# Note: If not directly displayed in your post; you __must__ state where your terms can be found, such as in a specific link or website. Buyers should not have to message you for additional information.",
+            "incomplete_tos": "due to insufficient information in your Terms of Service. Please keep in mind that __ALL__ of the following sections must be included __and__ elaborated on, based on [Rule 2.1](https://discord.com/channels/369798142289510401/492328409175687179/1324496338985029662): \n> Offers, Specified commission rights for seller and buyer, Payment method, Refund policy, and Contact.\nPlease read through the <#492328409175687179> before posting, and visit our [TOS Guide](https://discord.com/channels/369798142289510401/1191922480961552424/1191922480961552424) for examples on how to elaborate.\n-# Note: Please explicitly mention \"Terms of Service\" in your post rather than just generally listing your terms.",
+            "wrong_channel": "due to advertising services outside of its designated [server category](https://discord.com/channels/369798142289510401/1393271200729268294/1476738956396597290). Please ensure your post does not contain any form of advertising if it isn't allowed by its local channel ruling. Refer to this [list](https://discord.com/channels/369798142289510401/1393288825987665990/1476704979598442662) to find what designated channel your services would fall under.",
+            "wrong_channel_no_role": "due to advertising services outside of its designated [server category](https://discord.com/channels/369798142289510401/1393271200729268294/1476738956396597290), and without the Art Seller role. Please refer [here](https://discord.com/channels/369798142289510401/635030026911481856/1490007480955179180) for information on how to the obtain the Art Seller role.",
+            "chatting_daily_wins": "as the <#873116269640036362> channel is meant only for __posting__ positive achievements, and cannot be used for chatting. To respond to someone's daily win, please only use reaction emotes.",
+            "critique_format": "due to not following the format found in the channel's pins. Please follow the rules per channel. If unsure on how to formulate your critique request, or if you have any questions, please message staff at <@501746915218554881>.",
+            "art_in_chats": "due to posting art/writing work unrelated to current conversation topic. Please refer to channel pins for local ruling, as all art and writing should be shared to <#369833248240566282> or <#616268995246424097> instead."
         }
 
         if "others" in self.values:
