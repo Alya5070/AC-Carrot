@@ -87,7 +87,59 @@ async def init_db():
                 role_id INTEGER NOT NULL
             )
         ''')
+
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS verbal_reasons (
+                id TEXT PRIMARY KEY,
+                label TEXT NOT NULL,
+                text TEXT NOT NULL
+            )
+        ''')
+        
+        cursor = await db.execute("SELECT COUNT(*) FROM verbal_reasons")
+        count = (await cursor.fetchone())[0]
+        if count == 0:
+            default_reasons = [
+                ("underpricing", "Underpricing", "pricing below our server minimum of 15USD __per__ character, *or* below the server minimum of 5USD per 100 words for writing. Please refer to [Rule 2.4](https://discord.com/channels/369798142289510401/492328409175687179/1481767967103389727), and visit our [Commission Guide](https://discord.com/channels/369798142289510401/1393288825987665990/1476704977958469663) for more information.\n-# Note: Extra characters must also meet the server minimum of 15USD. Additionally, your post will be taken down if it has no specified currency, or uses one that is under the server minimum when converted."),
+                ("no_visible_pricing", "Lack of visible pricing and examples", "a lack of visible pricing and/or offer examples in your post. Be it through written text or images; offer examples, TOS, and pricing per service offered __must__ be visible in your post according to [Rule 2.1](https://discord.com/channels/369798142289510401/492328409175687179/1481767967103389727).\n-# Note: Refer to our [Local Rules](https://discord.com/channels/369798142289510401/1393271200729268294/1476738956396597290) per channel for more information."),
+                ("no_tos_mention", "Lack of/No mentions of ToS", "not having your Terms of Service linked or displayed properly, or indicated as to where they can be found. Refer to [Rule 2.1](https://discord.com/channels/369798142289510401/492328409175687179/1481767967103389727), read through the <#492328409175687179> before posting, and visit our [TOS Guide](https://discord.com/channels/369798142289510401/1191922480961552424/1191922480961552424) for examples on how your terms should be written.\n-# Note: If not directly displayed in your post; you __must__ state where your terms can be found, such as in a specific link or website. Buyers should not have to message you for additional information."),
+                ("incomplete_tos", "Incomplete ToS", "insufficient information in your Terms of Service. Please keep in mind that __ALL__ of the following sections must be included __and__ elaborated on, based on [Rule 2.1](https://discord.com/channels/369798142289510401/492328409175687179/1324496338985029662): \n> Offers, Specified commission rights for seller and buyer, Payment method, Refund policy, and Contact.\nPlease read through the <#492328409175687179> before posting, and visit our [TOS Guide](https://discord.com/channels/369798142289510401/1191922480961552424/1191922480961552424) for examples on how to elaborate.\n-# Note: Please explicitly mention \"Terms of Service\" in your post rather than just generally listing your terms."),
+                ("wrong_channel", "Advertising in wrong channel", "advertising services outside of its designated [server category](https://discord.com/channels/369798142289510401/1393271200729268294/1476738956396597290). Please ensure your post does not contain any form of advertising if it isn't allowed by its local channel ruling. Refer to this [list](https://discord.com/channels/369798142289510401/1393288825987665990/1476704979598442662) to find what designated channel your services would fall under."),
+                ("wrong_channel_no_role", "Advertising in wrong channel + no role", "advertising services outside of its designated [server category](https://discord.com/channels/369798142289510401/1393271200729268294/1476738956396597290), and without the Art Seller role. Please refer [here](https://discord.com/channels/369798142289510401/635030026911481856/1490007480955179180) for information on how to the obtain the Art Seller role."),
+                ("chatting_daily_wins", "Chatting in daily w", "as the <#873116269640036362> channel is meant only for __posting__ positive achievements, and cannot be used for chatting. To respond to someone's daily win, please only use reaction emotes."),
+                ("critique_format", "Critique format", "not following the format found in the channel's pins. Please follow the rules per channel. If unsure on how to formulate your critique request, or if you have any questions, please message staff at <@501746915218554881>."),
+                ("art_in_chats", "Art in chats", "posting art/writing work unrelated to current conversation topic. Please refer to channel pins for local ruling, as all art and writing should be shared to <#369833248240566282> or <#616268995246424097> instead.")
+            ]
+            await db.executemany("INSERT INTO verbal_reasons (id, label, text) VALUES (?, ?, ?)", default_reasons)
+
         await db.commit()
+
+# --- Verbal Reasons Methods ---
+
+async def get_all_verbal_reasons() -> list:
+    async with aiosqlite.connect(DB_NAME) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM verbal_reasons")
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+async def get_verbal_reason(reason_id: str) -> dict:
+    async with aiosqlite.connect(DB_NAME) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM verbal_reasons WHERE id = ?", (reason_id,))
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+async def add_verbal_reason(reason_id: str, label: str, text: str):
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute("INSERT OR REPLACE INTO verbal_reasons (id, label, text) VALUES (?, ?, ?)", (reason_id, label, text))
+        await db.commit()
+
+async def delete_verbal_reason(reason_id: str):
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute("DELETE FROM verbal_reasons WHERE id = ?", (reason_id,))
+        await db.commit()
+
 
 # --- Warning Tracker Methods ---
 
