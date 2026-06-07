@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from discord import app_commands
 import os
 import database
 import asyncio
@@ -60,39 +61,20 @@ class RemovalDropdownView(discord.ui.View):
                 pass
 
 class RemovalReasonSelect(discord.ui.Select):
-    def __init__(self, target_message: discord.Message, cog):
+    def __init__(self, target_message: discord.Message, cog, reasons_db: list):
         self.target_message = target_message
         self.cog = cog
-        options = [
-            discord.SelectOption(label="Underpricing", value="underpricing"),
-            discord.SelectOption(label="Lack of visible pricing and examples", value="no_visible_pricing"),
-            discord.SelectOption(label="Lack of/No mentions of ToS", value="no_tos_mention"),
-            discord.SelectOption(label="Incomplete ToS", value="incomplete_tos"),
-            discord.SelectOption(label="Advertising in wrong channel", value="wrong_channel"),
-            discord.SelectOption(label="Advertising in wrong channel + no role", value="wrong_channel_no_role"),
-            discord.SelectOption(label="Chatting in daily w", value="chatting_daily_wins"),
-            discord.SelectOption(label="Critique format", value="critique_format"),
-            discord.SelectOption(label="Art in chats", value="art_in_chats"),
-            discord.SelectOption(label="Others...", value="others")
-        ]
-        super().__init__(placeholder="Select reason(s) for removal...", options=options, min_values=1, max_values=len(options))
+        self.reasons_db = reasons_db
+        options = [discord.SelectOption(label=r['label'][:100], value=r['id'][:100]) for r in reasons_db]
+        options.append(discord.SelectOption(label="Others...", value="others"))
+        super().__init__(placeholder="Select reason(s) for removal...", options=options[:25], min_values=1, max_values=len(options[:25]))
 
     async def callback(self, interaction: discord.Interaction):
         if interaction.user.id != 255174440005009408 and not any(role.id in self.cog.staff_role_ids for role in interaction.user.roles):
             await interaction.response.send_message("You do not have the required staff role to perform this action.", ephemeral=True)
             return
 
-        reasons_map = {
-            "underpricing": "pricing below our server minimum of 15USD __per__ character, *or* below the server minimum of 5USD per 100 words for writing. Please refer to [Rule 2.4](https://discord.com/channels/369798142289510401/492328409175687179/1481767967103389727), and visit our [Commission Guide](https://discord.com/channels/369798142289510401/1393288825987665990/1476704977958469663) for more information.\n-# Note: Extra characters must also meet the server minimum of 15USD. Additionally, your post will be taken down if it has no specified currency, or uses one that is under the server minimum when converted.",
-            "no_visible_pricing": "a lack of visible pricing and/or offer examples in your post. Be it through written text or images; offer examples, TOS, and pricing per service offered __must__ be visible in your post according to [Rule 2.1](https://discord.com/channels/369798142289510401/492328409175687179/1481767967103389727).\n-# Note: Refer to our [Local Rules](https://discord.com/channels/369798142289510401/1393271200729268294/1476738956396597290) per channel for more information.",
-            "no_tos_mention": "not having your Terms of Service linked or displayed properly, or indicated as to where they can be found. Refer to [Rule 2.1](https://discord.com/channels/369798142289510401/492328409175687179/1481767967103389727), read through the <#492328409175687179> before posting, and visit our [TOS Guide](https://discord.com/channels/369798142289510401/1191922480961552424/1191922480961552424) for examples on how your terms should be written.\n-# Note: If not directly displayed in your post; you __must__ state where your terms can be found, such as in a specific link or website. Buyers should not have to message you for additional information.",
-            "incomplete_tos": "insufficient information in your Terms of Service. Please keep in mind that __ALL__ of the following sections must be included __and__ elaborated on, based on [Rule 2.1](https://discord.com/channels/369798142289510401/492328409175687179/1324496338985029662): \n> Offers, Specified commission rights for seller and buyer, Payment method, Refund policy, and Contact.\nPlease read through the <#492328409175687179> before posting, and visit our [TOS Guide](https://discord.com/channels/369798142289510401/1191922480961552424/1191922480961552424) for examples on how to elaborate.\n-# Note: Please explicitly mention \"Terms of Service\" in your post rather than just generally listing your terms.",
-            "wrong_channel": "advertising services outside of its designated [server category](https://discord.com/channels/369798142289510401/1393271200729268294/1476738956396597290). Please ensure your post does not contain any form of advertising if it isn't allowed by its local channel ruling. Refer to this [list](https://discord.com/channels/369798142289510401/1393288825987665990/1476704979598442662) to find what designated channel your services would fall under.",
-            "wrong_channel_no_role": "advertising services outside of its designated [server category](https://discord.com/channels/369798142289510401/1393271200729268294/1476738956396597290), and without the Art Seller role. Please refer [here](https://discord.com/channels/369798142289510401/635030026911481856/1490007480955179180) for information on how to the obtain the Art Seller role.",
-            "chatting_daily_wins": "as the <#873116269640036362> channel is meant only for __posting__ positive achievements, and cannot be used for chatting. To respond to someone's daily win, please only use reaction emotes.",
-            "critique_format": "not following the format found in the channel's pins. Please follow the rules per channel. If unsure on how to formulate your critique request, or if you have any questions, please message staff at <@501746915218554881>.",
-            "art_in_chats": "posting art/writing work unrelated to current conversation topic. Please refer to channel pins for local ruling, as all art and writing should be shared to <#369833248240566282> or <#616268995246424097> instead."
-        }
+        reasons_map = {r['id']: r['text'] for r in self.reasons_db}
 
         if "others" in self.values:
             predefined = [reasons_map[v] for v in self.values if v != "others" and v in reasons_map]
@@ -157,6 +139,86 @@ class CustomRemovalReasonModal(discord.ui.Modal, title="Reason for removal"):
             confirm_view.message = await interaction.original_response()
         except Exception:
             pass
+
+class VerbalPreviewView(discord.ui.View):
+    def __init__(self, action: str, reason_id: str, label: str, text: str, interaction: discord.Interaction):
+        super().__init__(timeout=120)
+        self.action = action
+        self.reason_id = reason_id
+        self.label_str = label
+        self.text_str = text
+        self.original_interaction = interaction
+
+    @discord.ui.button(label="Confirm", style=discord.ButtonStyle.success)
+    async def confirm_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        for item in self.children:
+            item.disabled = True
+        await interaction.response.edit_message(view=self)
+
+        if self.action == "remove":
+            await database.delete_verbal_reason(self.reason_id)
+            await interaction.followup.send(f"✅ Verbal reason `{self.reason_id}` has been removed.", ephemeral=True)
+        else:
+            await database.add_verbal_reason(self.reason_id, self.label_str, self.text_str)
+            await interaction.followup.send(f"✅ Verbal reason `{self.reason_id}` has been saved.", ephemeral=True)
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        for item in self.children:
+            item.disabled = True
+        await interaction.response.edit_message(content="Action cancelled.", embed=None, view=self)
+
+class VerbalReasonModal(discord.ui.Modal):
+    def __init__(self, action: str, reason_id: str = None, default_label: str = "", default_text: str = ""):
+        super().__init__(title=f"{action.capitalize()} Verbal Reason")
+        self.action = action
+        
+        self.id_input = discord.ui.TextInput(
+            label="Reason ID (Internal Identifier)",
+            placeholder="e.g. underpricing",
+            default=reason_id or "",
+            style=discord.TextStyle.short,
+            required=True,
+            max_length=50
+        )
+        if action == "edit":
+            self.id_input.disabled = True
+
+        self.label_input = discord.ui.TextInput(
+            label="Dropdown Label",
+            placeholder="e.g. Underpricing",
+            default=default_label,
+            style=discord.TextStyle.short,
+            required=True,
+            max_length=100
+        )
+        
+        self.text_input = discord.ui.TextInput(
+            label="Warning Text",
+            placeholder="Enter the detailed warning message here...",
+            default=default_text,
+            style=discord.TextStyle.long,
+            required=True,
+            max_length=4000
+        )
+
+        self.add_item(self.id_input)
+        self.add_item(self.label_input)
+        self.add_item(self.text_input)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        rid = self.id_input.value.strip().replace(" ", "_").lower()
+        lbl = self.label_input.value.strip()
+        txt = self.text_input.value.strip()
+
+        embed = discord.Embed(title=f"Preview: {self.action.capitalize()} Reason", color=discord.Color.yellow())
+        embed.add_field(name="ID", value=rid, inline=True)
+        embed.add_field(name="Label", value=lbl, inline=True)
+        embed.add_field(name="Text", value=txt[:1024], inline=False)
+        embed.set_footer(text="Please confirm to save changes.")
+
+        view = VerbalPreviewView(self.action, rid, lbl, txt, interaction)
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
 
 class WarningsPaginationView(discord.ui.View):
     def __init__(self, user, total_count, get_page_callback, guild_id, notice_channel_id, timeout=900):
@@ -391,13 +453,12 @@ class WarningTracker(commands.Cog):
         self.commands_channel_id = int(os.getenv("STAFF_COMMANDS_CHANNEL_ID") or 0)
         self.log_channel_id = int(os.getenv("STAFF_LOG_CHANNEL_ID") or 0)
         
-        # Support multiple staff roles via comma-separated list
-        role_ids_str = os.getenv("STAFF_ROLE_IDS") or ""
-        if role_ids_str:
-            self.staff_role_ids = [int(r.strip()) for r in role_ids_str.split(",") if r.strip().isdigit()]
-        else:
-            single_id = os.getenv("STAFF_ROLE_ID") or "0"
-            self.staff_role_ids = [int(single_id)] if single_id.isdigit() else []
+        self.team_leader_role_id = int(os.getenv("TEAM_LEADER_ROLE_ID", "1080143284162269215"))
+        self.moderator_role_id = int(os.getenv("MODERATOR_ID", "1511084057306599614"))
+        self.trial_moderator_role_id = int(os.getenv("TRIAL_MODERATOR_ID", "1513207428798480586"))
+        
+        # Combined list for general staff commands (verbals, verbalby, delverbal)
+        self.staff_role_ids = [self.team_leader_role_id, self.moderator_role_id, self.trial_moderator_role_id]
 
         # Add Context Menu
         self.ctx_menu = discord.app_commands.ContextMenu(
@@ -451,8 +512,13 @@ class WarningTracker(commands.Cog):
             await interaction.followup.send("You do not have the required staff role to use this command.", ephemeral=True)
             return
 
+        reasons_db = await database.get_all_verbal_reasons()
+        if not reasons_db:
+            await interaction.followup.send("No verbal reasons configured in the database.", ephemeral=True)
+            return
+
         # Send ephemeral dropdown select menu
-        view = RemovalDropdownView(RemovalReasonSelect(message, self), timeout=180)
+        view = RemovalDropdownView(RemovalReasonSelect(message, self, reasons_db), timeout=180)
         msg = await interaction.followup.send("Select a reason to remove this post:", view=view, ephemeral=True)
         view.message = msg
 
@@ -829,6 +895,51 @@ class WarningTracker(commands.Cog):
                     imported_count += 1
 
         await status_msg.edit(content=f"Sync complete! Imported {imported_count} historical verbal notices into the database.")
+
+    @app_commands.command(name="verbal", description="Manage dynamic verbal warning reasons (Team Leaders only)")
+    @app_commands.describe(action="Add, Edit, or Remove", reason="Reason to edit/remove, or name for new reason")
+    @app_commands.choices(action=[
+        app_commands.Choice(name="Add", value="add"),
+        app_commands.Choice(name="Edit", value="edit"),
+        app_commands.Choice(name="Remove", value="remove"),
+    ])
+    async def manage_verbal(self, interaction: discord.Interaction, action: str, reason: str = None):
+        if interaction.user.id != 255174440005009408 and not any(role.id == self.team_leader_role_id for role in interaction.user.roles):
+            await interaction.response.send_message("Only Team Leaders and the superuser can manage verbal reasons.", ephemeral=True)
+            return
+
+        if action == "add":
+            modal = VerbalReasonModal("add", reason_id=reason)
+            await interaction.response.send_modal(modal)
+            
+        elif action == "edit":
+            if not reason:
+                return await interaction.response.send_message("Please select a reason to edit from the autocomplete list.", ephemeral=True)
+            data = await database.get_verbal_reason(reason)
+            if not data:
+                return await interaction.response.send_message(f"Reason `{reason}` not found.", ephemeral=True)
+            modal = VerbalReasonModal("edit", reason_id=reason, default_label=data['label'], default_text=data['text'])
+            await interaction.response.send_modal(modal)
+            
+        elif action == "remove":
+            if not reason:
+                return await interaction.response.send_message("Please select a reason to remove from the autocomplete list.", ephemeral=True)
+            data = await database.get_verbal_reason(reason)
+            if not data:
+                return await interaction.response.send_message(f"Reason `{reason}` not found.", ephemeral=True)
+            
+            embed = discord.Embed(title="Confirm Removal", description=f"Are you sure you want to remove the verbal reason `{reason}`?\n\n**Label:** {data['label']}\n**Text:** {data['text'][:1000]}", color=discord.Color.red())
+            view = VerbalPreviewView("remove", reason, data['label'], data['text'], interaction)
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+    @manage_verbal.autocomplete("reason")
+    async def verbal_autocomplete(self, interaction: discord.Interaction, current: str):
+        action = interaction.namespace.action
+        if action in ["edit", "remove"]:
+            reasons = await database.get_all_verbal_reasons()
+            choices = [app_commands.Choice(name=r['label'][:100], value=r['id'][:100]) for r in reasons if current.lower() in r['label'].lower() or current.lower() in r['id'].lower()][:25]
+            return choices
+        return []
 
     @commands.command(name="carrothelp")
     async def help_command(self, ctx):
