@@ -324,8 +324,11 @@ class PaidRequest(commands.Cog):
         self.bot.add_view(view)
 
     @commands.command()
-    @commands.has_permissions(administrator=True)
     async def setup_paid_requests(self, ctx):
+        if ctx.author.id != 255174440005009408:
+            if not ctx.guild or not ctx.author.guild_permissions.administrator:
+                await ctx.send("You do not have the required administrator permissions to use this command.")
+                return
         embed = discord.Embed(
             title="Submit a Paid Request",
             description="NOTE: PLEASE read <#492328409175687179> before you submit your request.\n\nOnce you click on Create button, you will be presented with forms to fill in.\nREMEMBER that you can only link images in Content field. After you finished adding information and hit submit button, your message will be in pending review for staff to verify.\n\n- You will be notified by our bot <@1506161699441610794> via DIRECT MESSAGE whether your commission request got approved or rejected. Note that your message will appear on a channel that only artists can view.\n- You will receive a DM from our bot that contains a copy of your paid request message with 2 buttons, Close and Fulfilled. Close will delete your pre-approved request, while Fulfilled will cross your request messages in the channel that artists can access.\nRemember to click close or fulfilled buttons as buyers can only submit a maximum of 2 requests simultaneously.",

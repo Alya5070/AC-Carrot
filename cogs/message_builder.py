@@ -437,8 +437,7 @@ class MessageBuilder(commands.Cog):
         self.bot = bot
         self.ctx_menu = app_commands.ContextMenu(name="Edit Bot Message", callback=self.edit_bot_message_ctx)
         self.bot.tree.add_command(self.ctx_menu)
-        role_ids_str = os.getenv("STAFF_ROLE_IDS") or ""
-        self.staff_role_ids = [int(r.strip()) for r in role_ids_str.split(",") if r.strip().isdigit()]
+        self.team_leader_role_id = int(os.getenv("TEAM_LEADER_ROLE_ID", "1080143284162269215"))
 
     def cog_unload(self):
         self.bot.tree.remove_command(self.ctx_menu.name, type=self.ctx_menu.type)
@@ -446,10 +445,9 @@ class MessageBuilder(commands.Cog):
     @app_commands.command(name="send_as", description="Send a message as Carrot")
     @app_commands.describe(message="The message to send")
     async def send_as(self, interaction: discord.Interaction, message: str):
-        # Allow administrators OR the specific superuser OR staff roles
-        is_admin = interaction.user.guild_permissions.administrator if interaction.guild else False
-        has_staff_role = interaction.guild and any(role.id in self.staff_role_ids for role in getattr(interaction.user, 'roles', []))
-        if not (is_admin or has_staff_role or interaction.user.id == 255174440005009408):
+        # Allow TEAM LEADERS or Superuser
+        is_team_leader = interaction.guild and any(role.id == self.team_leader_role_id for role in getattr(interaction.user, 'roles', []))
+        if not (is_team_leader or interaction.user.id == 255174440005009408):
             await interaction.response.send_message("❌ You do not have permission to use this command.", ephemeral=True)
             return
 

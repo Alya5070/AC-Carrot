@@ -235,8 +235,11 @@ class Chatbot(commands.Cog):
             self.active_preview_message = None
 
     @commands.command(name="chatbot_setup_channel")
-    @commands.has_permissions(administrator=True)
     async def chatbot_setup_channel(self, ctx):
+        if ctx.author.id != 255174440005009408:
+            if not ctx.guild or not ctx.author.guild_permissions.administrator:
+                await ctx.send("You do not have the required administrator permissions to use this command.")
+                return
         """Spawns the persistent message in the channel for users to initiate chatbot DMs."""
         embed = discord.Embed(
             title="🥕 Contact Carrot Support",
