@@ -76,6 +76,36 @@ class PaidRequestModal(discord.ui.Modal):
         use_case_val = sanitize_input(self.use_case.value, 50)
         content_val = sanitize_input(self.content.value, 1000)
         
+        
+        # Validate budget currency
+        budget_upper = budget_val.upper()
+        currencies = {"USD", "AUD", "CAD", "NZD", "EUR", "GBP", "SGD", "MYR", "PHP", "IDR", "JPY", "HKD", "TWD", "KRW", "INR"}
+        if not any(code in budget_upper for code in currencies):
+            view = discord.ui.View(timeout=180)
+            fix_btn = discord.ui.Button(label="Fix Budget", style=discord.ButtonStyle.primary)
+            
+            async def fix_callback(btn_interaction: discord.Interaction):
+                await btn_interaction.response.send_modal(PaidRequestModal(
+                    request_id=self.request_id,
+                    budget_val=self.budget.value,
+                    sfw_nsfw_val=self.sfw_nsfw.value,
+                    payment_method_val=self.payment_method.value,
+                    use_case_val=self.use_case.value,
+                    content_val=self.content.value,
+                    review_msg_id=self.review_msg_id,
+                    dm_msg=self.dm_msg
+                ))
+            
+            fix_btn.callback = fix_callback
+            view.add_item(fix_btn)
+            
+            await interaction.followup.send(
+                "⚠️ **Invalid Budget Format**\nYou must specify the currency abbreviation (e.g. **USD, AUD, CAD, NZD, EUR**) in the budget field so staff know which currency it is.\n\nClick the button below to correct your input without losing what you typed.",
+                view=view,
+                ephemeral=True
+            )
+            return
+            
         if is_edit:
             req_id = self.request_id
             await database.update_paid_request_details(
