@@ -117,13 +117,21 @@ class PaidRequestModal(discord.ui.Modal):
             )
             return
             
-        # 2. Check if detects $ and a number/digit
-        has_dollar = "$" in budget_val
+        # 2. Check if detects a number/digit
         has_digit = any(c.isdigit() for c in budget_val)
         
-        if has_dollar and has_digit:
+        if has_digit:
             currencies = {"USD", "AUD", "CAD", "NZD", "EUR", "GBP", "SGD", "MYR", "PHP", "IDR", "JPY", "HKD", "TWD", "KRW", "INR"}
             if not any(code in budget_upper for code in currencies):
+                has_dollar = "$" in budget_val
+                
+                if has_dollar:
+                    error_label = "SPECIFY USD/AUD/CAD/etc."
+                    error_msg = "⚠️ **Specify Dollar Currency**\nYou used the '$' symbol with a number, but did not specify which dollar currency it is (e.g. **USD, AUD, CAD, NZD**).\n\nClick the button below to specify the currency."
+                else:
+                    error_label = "SPECIFY CURRENCY (USD/AUD/etc)"
+                    error_msg = "⚠️ **Specify Currency**\nYou only wrote a number. Please specify which currency it is (e.g. **USD, AUD, CAD, NZD, EUR**).\n\nClick the button below to specify the currency."
+
                 view = discord.ui.View(timeout=180)
                 fix_btn = discord.ui.Button(label="Specify Currency", style=discord.ButtonStyle.primary)
                 
@@ -137,14 +145,14 @@ class PaidRequestModal(discord.ui.Modal):
                         content_val=self.content.value,
                         review_msg_id=self.review_msg_id,
                         dm_msg=self.dm_msg,
-                        budget_error="SPECIFY USD/AUD/CAD/etc."
+                        budget_error=error_label
                     ))
                 
                 fix_btn.callback = fix_callback
                 view.add_item(fix_btn)
                 
                 await interaction.followup.send(
-                    "⚠️ **Specify Dollar Currency**\nYou used the '$' symbol with a number, but did not specify which dollar currency it is (e.g. **USD, AUD, CAD, NZD**).\n\nClick the button below to specify the currency.",
+                    error_msg,
                     view=view,
                     ephemeral=True
                 )
