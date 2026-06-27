@@ -215,7 +215,7 @@ class WarningTracker(commands.Cog):
             dashboard_url = os.getenv("DASHBOARD_URL", "http://localhost:3000")
             log_embed.add_field(
                 name="Web Log",
-                value=f"[View in Dashboard]({dashboard_url}/guilds/{message.guild.id if message.guild else 0}/logs/warnings/{warn_id})",
+                value=f"[log]({dashboard_url}/guilds/{message.guild.id if message.guild else 0}/logs/warnings/{warn_id})",
                 inline=False
             )
                 
@@ -257,7 +257,7 @@ class WarningTracker(commands.Cog):
                     if unbold_rest:
                         quoted_lines.append(f"> {line}")
                     else:
-                        quoted_lines.append(f"> **{line}**")
+                        quoted_lines.append(f"> {line}")
                 desc += "\n".join(quoted_lines) + "\n"
                 
                 if is_repeat:
@@ -401,7 +401,7 @@ class WarningTracker(commands.Cog):
                 embed.set_author(name=f"Art Commissions | {timestamp_str}", icon_url=icon_url)
                 
                 ordinal_num = get_ordinal(count)
-                desc = f"## This is your {ordinal_num} verbal warning\n\n"
+                desc = f"### your {ordinal_num} verbal warning\n\n"
                 desc += "You have received a __verbal warning__ in Art Commissions server for:\n\n"
                 
                 context_reason = message.content
@@ -425,8 +425,8 @@ class WarningTracker(commands.Cog):
                 elif count == 2:
                     desc += "\n⚠️ **This is your 2nd verbal notice in the last 3 months.** Accumulating one more notice will result in further staff action.\n"
                 
-                desc += f"-# **[View your verbal warning here.]({message.jump_url})**\n\n"
-                desc += "-# In case of questions or concerns that you've been verbally warned by mistake, contact <@501746915218554881>"
+                desc += f"\n-# **[View your verbal warning here.]({message.jump_url})**\n\n"
+                desc += "-# In case of questions, or if you believe you've been warned by mistake; please contact  <@501746915218554881>"
                 
                 embed.description = desc
                 embed.set_footer(text="Keep in mind that verbal warnings reset every 3 months.")
