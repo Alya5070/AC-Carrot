@@ -1,10 +1,14 @@
-"use client";
-
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { ShieldAlert, Search, Trash2, RefreshCw, Clock, MessageSquare, ExternalLink, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Filter } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { useGuild } from "../../../context/GuildContext";
+
+type Attachment = {
+  filename: string;
+  url: string;
+};
 
 type Warning = {
   id: number;
@@ -20,15 +24,45 @@ type Warning = {
   staff_avatar: string | null;
   reason: string | null;
   post_created_at: string | null;
-  attachments?: string[]; // optional array of attachment URLs
+  attachments?: Attachment[];
 };
 
-export default function WarningsPage() {
+function WarningsPageContent() {
   const [warnings, setWarnings] = useState<Warning[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedWarning, setSelectedWarning] = useState<Warning | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const { selectedGuildId } = useGuild();
+  const { selectedGuildId, setSelectedGuildId } = useGuild();
+
+  const searchParams = useSearchParams();
+  const warningIdParam = searchParams.get("warningId");
+  const guildIdParam = searchParams.get("guildId");
+
+  // Handle direct links to specific warnings / guilds
+  useEffect(() => {
+    if (guildIdParam && guildIdParam !== selectedGuildId) {
+      setSelectedGuildId(guildIdParam);
+    }
+  }, [guildIdParam]);
+
+  useEffect(() => {
+    if (warningIdParam) {
+      const warningId = parseInt(warningIdParam, 10);
+      if (!isNaN(warningId)) {
+        fetch(`${apiUrl}/api/warnings/${warningId}`)
+          .then(res => {
+            if (res.ok) return res.json();
+            throw new Error("Warning not found");
+          })
+          .then(data => {
+            setSelectedWarning(data);
+          })
+          .catch(err => {
+            console.error("Failed to load warning from query param:", err);
+          });
+      }
+    }
+  }, [warningIdParam]);
 
   // Pagination & Sorting State
   const [currentPage, setCurrentPage] = useState(1);
@@ -432,18 +466,34 @@ export default function WarningsPage() {
 
               {/* Attachments */}
               {selectedWarning.attachments && selectedWarning.attachments.length > 0 && (
-                <div className="mt-4">
+                <div className="mt-4 border-t border-white/5 pt-4">
                   <div className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2">Attachments</div>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {selectedWarning.attachments.map((url, idx) => (
-                      url.match(/\.(jpeg|jpg|png|gif|webp)$/i) ? (
-                        <img key={idx} src={url} alt={`attachment-${idx}`} className="max-w-full h-auto rounded-md object-cover" />
-                      ) : (
-                        <a key={idx} href={url} target="_blank" rel="noreferrer" className="text-teal-400 hover:text-teal-300 break-all">
-                          Download File
-                        </a>
-                      )
-                    ))}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {selectedWarning.attachments.map((file, idx) => {
+                      const isImage = file.url && file.url.match(/\.(jpeg|jpg|png|gif|webp)$/i);
+                      return (
+                        <div key={idx} className="bg-black/30 p-2 rounded-lg border border-white/5 flex flex-col items-center gap-1 group relative">
+                          {isImage ? (
+                            <a href={file.url} target="_blank" rel="noreferrer" className="w-full h-20 overflow-hidden rounded-md border border-white/10 flex items-center justify-center bg-black/40 hover:opacity-80 transition-all">
+                              <img src={file.url} alt={file.filename} className="w-full h-full object-cover" />
+                            </a>
+                          ) : (
+                            <div className="w-full h-20 flex items-center justify-center bg-black/40 rounded-md border border-white/10 text-gray-500 text-xs font-mono text-center px-1">
+                              File
+                            </div>
+                          )}
+                          <a 
+                            href={file.url} 
+                            target="_blank" 
+                            rel="noreferrer" 
+                            className="text-teal-400 hover:text-teal-300 text-[10px] truncate w-full text-center mt-1 font-mono transition-colors"
+                            title={file.filename}
+                          >
+                            {file.filename}
+                          </a>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -470,3 +520,16 @@ export default function WarningsPage() {
     </div>
   );
 }
+
+export default function WarningsPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-[50vh] text-teal-400">
+        <div className="animate-pulse">Loading warning logs...</div>
+      </div>
+    }>
+      <WarningsPageContent />
+    </Suspense>
+  );
+}
+

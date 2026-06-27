@@ -64,7 +64,7 @@ async def get_warnings(guild_id: int, limit: int = 50, offset: int = 0):
         
         if guild_id == 0:
             cursor = await db.execute('''
-                SELECT id, user_id, warned_at, channel_id, message_id, message_content, staff_id, reason, post_created_at 
+                SELECT id, user_id, warned_at, channel_id, message_id, message_content, staff_id, reason, post_created_at, attachments 
                 FROM warnings
                 ORDER BY warned_at DESC
                 LIMIT ? OFFSET ?
@@ -76,7 +76,7 @@ async def get_warnings(guild_id: int, limit: int = 50, offset: int = 0):
             total = (await count_cursor.fetchone())[0]
         else:
             cursor = await db.execute('''
-                SELECT id, user_id, warned_at, channel_id, message_id, message_content, staff_id, reason, post_created_at 
+                SELECT id, user_id, warned_at, channel_id, message_id, message_content, staff_id, reason, post_created_at, attachments 
                 FROM warnings
                 WHERE guild_id = ?
                 ORDER BY warned_at DESC
@@ -89,6 +89,17 @@ async def get_warnings(guild_id: int, limit: int = 50, offset: int = 0):
                 SELECT COUNT(*) FROM warnings WHERE guild_id = ?
             ''', (guild_id,))
             total = (await count_cursor.fetchone())[0]
+
+    # Parse attachments JSON
+    import json
+    for w in warnings:
+        if w.get('attachments'):
+            try:
+                w['attachments'] = json.loads(w['attachments'])
+            except Exception:
+                w['attachments'] = []
+        else:
+            w['attachments'] = []
 
     # Dynamically resolve Discord usernames
     if bot_client:
@@ -118,6 +129,49 @@ async def get_warnings(guild_id: int, limit: int = 50, offset: int = 0):
                 w['staff_avatar'] = None
 
     return {"warnings": warnings, "total": total}
+
+@app.get("/api/warnings/{warning_id}")
+async def get_single_warning(warning_id: int):
+    warn = await database.get_warning_by_id(warning_id)
+    if not warn:
+        raise HTTPException(status_code=404, detail="Warning not found")
+        
+    # Resolve usernames if bot is connected
+    if bot_client:
+        user_id = warn.get('user_id')
+        user_data = await get_cached_user(user_id)
+        if user_data:
+            warn['user_name'] = user_data['name']
+            warn['user_avatar'] = user_data['avatar']
+        else:
+            warn['user_name'] = f"Unknown ({user_id})" if user_id else "Unknown"
+            warn['user_avatar'] = None
+
+        staff_id = warn.get('staff_id')
+        staff_data = await get_cached_user(staff_id)
+        if staff_data:
+            warn['staff_name'] = staff_data['name']
+            warn['staff_avatar'] = staff_data['avatar']
+        else:
+            warn['staff_name'] = f"Unknown ({staff_id})" if staff_id else "Unknown"
+            warn['staff_avatar'] = None
+    else:
+        warn['user_name'] = f"User {warn.get('user_id')}"
+        warn['user_avatar'] = None
+        warn['staff_name'] = f"Staff {warn.get('staff_id')}" if warn.get('staff_id') else "System"
+        warn['staff_avatar'] = None
+
+    if warn.get('attachments'):
+        import json
+        try:
+            warn['attachments'] = json.loads(warn['attachments'])
+        except Exception:
+            warn['attachments'] = []
+    else:
+        warn['attachments'] = []
+        
+    return warn
+
 
 @app.get("/api/guilds/{guild_id}/warning-reasons")
 async def get_warning_reasons(guild_id: int):

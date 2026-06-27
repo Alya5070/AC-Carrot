@@ -18,7 +18,8 @@ async def init_db():
                 message_id INTEGER NOT NULL,
                 message_content TEXT,
                 staff_id INTEGER,
-                reason TEXT
+                reason TEXT,
+                attachments TEXT
             )
         ''')
         
@@ -50,12 +51,19 @@ async def init_db():
         except aiosqlite.OperationalError:
             pass # Column already exists
 
-        # Safe migration if database already exists without post_created_at
         try:
             await db.execute('ALTER TABLE warnings ADD COLUMN post_created_at TIMESTAMP')
             await db.commit()
         except aiosqlite.OperationalError:
             pass # Column already exists
+
+        # Safe migration if database already exists without attachments
+        try:
+            await db.execute('ALTER TABLE warnings ADD COLUMN attachments TEXT')
+            await db.commit()
+        except aiosqlite.OperationalError:
+            pass # Column already exists
+
             
         await db.execute('''
             CREATE TABLE IF NOT EXISTS paid_requests (
@@ -317,18 +325,18 @@ async def migrate_env_to_db(guild_id: int):
 
 # --- Warning Tracker Methods ---
 
-async def add_warning(user_id: int, channel_id: int, message_id: int, message_content: str, staff_id: int = None, reason: str = None, warned_at: str = None, post_created_at: str = None, guild_id: int = None):
+async def add_warning(user_id: int, channel_id: int, message_id: int, message_content: str, staff_id: int = None, reason: str = None, warned_at: str = None, post_created_at: str = None, guild_id: int = None, attachments: str = None):
     async with aiosqlite.connect(DB_NAME) as db:
         if warned_at:
             cursor = await db.execute('''
-                INSERT INTO warnings (user_id, channel_id, message_id, message_content, staff_id, reason, warned_at, post_created_at, guild_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (user_id, channel_id, message_id, message_content, staff_id, reason, warned_at, post_created_at, guild_id))
+                INSERT INTO warnings (user_id, channel_id, message_id, message_content, staff_id, reason, warned_at, post_created_at, guild_id, attachments)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (user_id, channel_id, message_id, message_content, staff_id, reason, warned_at, post_created_at, guild_id, attachments))
         else:
             cursor = await db.execute('''
-                INSERT INTO warnings (user_id, channel_id, message_id, message_content, staff_id, reason, post_created_at, guild_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (user_id, channel_id, message_id, message_content, staff_id, reason, post_created_at, guild_id))
+                INSERT INTO warnings (user_id, channel_id, message_id, message_content, staff_id, reason, post_created_at, guild_id, attachments)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (user_id, channel_id, message_id, message_content, staff_id, reason, post_created_at, guild_id, attachments))
         await db.commit()
         return cursor.lastrowid
 

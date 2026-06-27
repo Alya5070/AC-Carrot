@@ -133,17 +133,15 @@ class WarningTracker(commands.Cog):
         warn_channel_id = notice_channel_id if notice_msg else message.channel.id
         warn_message_id = notice_msg.id if notice_msg else 0
         
-        # Format attachments as clean markdown links and append to reason
-        db_reason = reason
+        # Save attachments as JSON in the database rather than appending to reason text
         all_attachments = list(message.attachments)
         if hasattr(message, "message_snapshots") and message.message_snapshots:
             for snapshot in message.message_snapshots:
                 if hasattr(snapshot, "attachments") and snapshot.attachments:
                     all_attachments.extend(snapshot.attachments)
 
-        if all_attachments:
-            attachments_str = "\n**Attachments:**\n" + "\n".join([f"- [{a.filename}]({a.url})" for a in all_attachments])
-            db_reason += attachments_str
+        import json
+        attachments_data = json.dumps([{"filename": a.filename, "url": a.url} for a in all_attachments]) if all_attachments else None
         
         warn_id = await database.add_warning(
             user_id=message.author.id,
@@ -151,9 +149,10 @@ class WarningTracker(commands.Cog):
             message_id=warn_message_id,
             message_content=original_content,
             staff_id=interaction.user.id,
-            reason=db_reason,
+            reason=reason,
             post_created_at=message.created_at.isoformat(),
-            guild_id=message.guild.id if message.guild else None
+            guild_id=message.guild.id if message.guild else None,
+            attachments=attachments_data
         )
 
         # Log it in staff log channel
@@ -215,7 +214,7 @@ class WarningTracker(commands.Cog):
             dashboard_url = os.getenv("DASHBOARD_URL", "http://localhost:3000")
             log_embed.add_field(
                 name="Web Log",
-                value=f"[log]({dashboard_url}/guilds/{message.guild.id if message.guild else 0}/logs/warnings/{warn_id})",
+                value=f"[log](https://{dashboard_url}/guilds/{message.guild.id if message.guild else 0}/logs/warnings/{warn_id})",
                 inline=False
             )
                 
@@ -242,7 +241,7 @@ class WarningTracker(commands.Cog):
                 embed.set_author(name=f"{guild_name} | {timestamp_str}", icon_url=icon_url)
                 
                 ordinal_num = get_ordinal(count)
-                desc = f"## This is your {ordinal_num} verbal warning\n\n"
+                desc = f"### This is your {ordinal_num} verbal warning\n\n"
                 suffix = "" if "server" in guild_name.lower() else " server"
                 desc += f"You have received a __verbal warning__ in {guild_name}{suffix} for:\n"
                 
@@ -268,7 +267,7 @@ class WarningTracker(commands.Cog):
                     desc += "\n⚠️ **This is your 2nd verbal notice in the last 3 months.** Accumulating one more notice will result in further staff action.\n"
                 
                 jump_url = notice_msg.jump_url if notice_msg else "https://discord.com"
-                desc += f"**[Link to verbal warn]({jump_url})**\n\n"
+                desc += f"\n**[Link to verbal warn]({jump_url})**\n\n"
                 desc += "-# Contact <@501746915218554881> for appeal or concerns."
                 
                 embed.description = desc
@@ -376,6 +375,15 @@ class WarningTracker(commands.Cog):
             if user.bot:
                 continue
                 
+            all_attachments = list(message.attachments)
+            if hasattr(message, "message_snapshots") and message.message_snapshots:
+                for snapshot in message.message_snapshots:
+                    if hasattr(snapshot, "attachments") and snapshot.attachments:
+                        all_attachments.extend(snapshot.attachments)
+
+            import json
+            attachments_data = json.dumps([{"filename": a.filename, "url": a.url} for a in all_attachments]) if all_attachments else None
+
             # Add warning to database (saving message content)
             await database.add_warning(
                 user_id=user.id,
@@ -385,7 +393,8 @@ class WarningTracker(commands.Cog):
                 staff_id=message.author.id,
                 reason=message.content,
                 post_created_at=message.created_at.isoformat(),
-                guild_id=message.guild.id if message.guild else None
+                guild_id=message.guild.id if message.guild else None,
+                attachments=attachments_data
             )
             
             # Check warning count
@@ -651,6 +660,16 @@ class WarningTracker(commands.Cog):
                 if not exists:
                     # Sync staff ID: message.author is the staff unless the message was sent by the bot
                     staff_id = None if message.author.bot else message.author.id
+                    
+                    all_attachments = list(message.attachments)
+                    if hasattr(message, "message_snapshots") and message.message_snapshots:
+                        for snapshot in message.message_snapshots:
+                            if hasattr(snapshot, "attachments") and snapshot.attachments:
+                                all_attachments.extend(snapshot.attachments)
+
+                    import json
+                    attachments_data = json.dumps([{"filename": a.filename, "url": a.url} for a in all_attachments]) if all_attachments else None
+
                     await database.add_warning(
                         user_id=user.id, 
                         channel_id=message.channel.id, 
@@ -660,7 +679,8 @@ class WarningTracker(commands.Cog):
                         reason=message.content,
                         warned_at=warned_at_str,
                         post_created_at=message.created_at.isoformat(),
-                        guild_id=message.guild.id if message.guild else None
+                        guild_id=message.guild.id if message.guild else None,
+                        attachments=attachments_data
                     )
                     imported_count += 1
 
