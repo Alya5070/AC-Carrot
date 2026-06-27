@@ -16,6 +16,8 @@ type PaidRequest = {
   content: string;
   status: string;
   created_at: string;
+  staff_name?: string;
+  actioned_by?: number | null;
 };
 
 export default function RequestsPage() {
