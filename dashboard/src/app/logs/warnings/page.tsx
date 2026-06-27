@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { ShieldAlert, Search, Trash2, RefreshCw, Clock, MessageSquare, ExternalLink, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Filter } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 import { useGuild } from "../../../context/GuildContext";
 
 type Warning = {
@@ -396,7 +397,7 @@ export default function WarningsPage() {
               <div>
                 <div className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2">Rejection Reason</div>
                 <div className="bg-surface-darker p-4 rounded-lg border border-teal-900/40 text-gray-300 whitespace-pre-wrap leading-relaxed shadow-inner">
-                  {selectedWarning.reason || "No reason recorded."}
+                  <ReactMarkdown>{selectedWarning.reason || "No reason recorded."}</ReactMarkdown>
                 </div>
               </div>
 

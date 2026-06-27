@@ -132,7 +132,6 @@ async def get_warning_reasons(guild_id: int):
 
 @app.get("/api/guilds/{guild_id}/paid-requests")
 async def get_paid_requests(guild_id: int, limit: int = 50, offset: int = 0):
-    # For now we ignore guild_id as paid_requests doesn't have it, but keeping it for consistency
     async with database.aiosqlite.connect(database.DB_NAME) as db:
         db.row_factory = database.aiosqlite.Row
         
@@ -237,18 +236,23 @@ async def get_analytics(guild_id: int, period: str = "month"):
     async with database.aiosqlite.connect(database.DB_NAME) as db:
         db.row_factory = database.aiosqlite.Row
         
-        # SQLite date() function works beautifully with ISO format strings
-        # We generate a CTE (Common Table Expression) of all dates in the range, or we can just group by date.
-        # Since we just want data points, grouping existing rows by date is easiest.
-        
         # Get warnings grouped by date
-        w_cursor = await db.execute(f"""
-            SELECT date(warned_at) as day, COUNT(*) as count 
-            FROM warnings 
-            WHERE guild_id = ? AND date(warned_at) >= date('now', '-{days} days')
-            GROUP BY date(warned_at)
-            ORDER BY day ASC
-        """, (guild_id,))
+        if guild_id == 0:
+            w_cursor = await db.execute(f"""
+                SELECT date(warned_at) as day, COUNT(*) as count 
+                FROM warnings 
+                WHERE date(warned_at) >= date('now', '-{days} days')
+                GROUP BY date(warned_at)
+                ORDER BY day ASC
+            """)
+        else:
+            w_cursor = await db.execute(f"""
+                SELECT date(warned_at) as day, COUNT(*) as count 
+                FROM warnings 
+                WHERE guild_id = ? AND date(warned_at) >= date('now', '-{days} days')
+                GROUP BY date(warned_at)
+                ORDER BY day ASC
+            """, (guild_id,))
         warn_rows = await w_cursor.fetchall()
         
         # Get paid requests grouped by date (paid_requests doesn't have guild_id, so we ignore it here)
@@ -262,9 +266,7 @@ async def get_analytics(guild_id: int, period: str = "month"):
         paid_rows = await p_cursor.fetchall()
         
         # Merge them into a single timeline array for Recharts
-        # Format: { date: "2026-06-25", warnings: 5, requests: 2 }
         timeline = {}
-        
         from datetime import datetime, timedelta
         
         # Prefill timeline with 0s to ensure the chart doesn't skip days
