@@ -37,6 +37,8 @@ export default function WarningsPage() {
   const [staffFilter, setStaffFilter] = useState<string>("All");
   const [totalCount, setTotalCount] = useState(0);
 
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
   const fetchWarnings = () => {
     if (!selectedGuildId || selectedGuildId === "0") {
       setWarnings([]);
@@ -45,7 +47,6 @@ export default function WarningsPage() {
       return;
     }
     setLoading(true);
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
     const params = new URLSearchParams({
       page: currentPage.toString(),
       limit: itemsPerPage.toString(),
