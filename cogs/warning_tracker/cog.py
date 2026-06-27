@@ -243,7 +243,8 @@ class WarningTracker(commands.Cog):
                 
                 ordinal_num = get_ordinal(count)
                 desc = f"## This is your {ordinal_num} verbal warning\n\n"
-                desc += f"You have received a __verbal warning__ in {guild_name} server for:\n"
+                suffix = "" if "server" in guild_name.lower() else " server"
+                desc += f"You have received a __verbal warning__ in {guild_name}{suffix} for:\n"
                 
                 context_reason = reason
                 if len(context_reason) > 1200:
@@ -405,8 +406,9 @@ class WarningTracker(commands.Cog):
                 embed.set_author(name=f"{guild_name} | {timestamp_str}", icon_url=icon_url)
                 
                 ordinal_num = get_ordinal(count)
-                desc = f"### your {ordinal_num} verbal warning\n\n"
-                desc += f"You have received a __verbal warning__ in {guild_name} server for:\n\n"
+                desc = f"### This is your {ordinal_num} verbal warning\n\n"
+                suffix = "" if "server" in guild_name.lower() else " server"
+                desc += f"You have received a __verbal warning__ in {guild_name}{suffix} for:\n\n"
                 
                 context_reason = message.content
                 if len(context_reason) > 1200:
@@ -421,7 +423,7 @@ class WarningTracker(commands.Cog):
                     if unbold_rest:
                         quoted_lines.append(f"> {line}")
                     else:
-                        quoted_lines.append(f"> **{line}**")
+                        quoted_lines.append(f"> {line}")
                 desc += "\n".join(quoted_lines) + "\n"
                 
                 if is_repeat:
