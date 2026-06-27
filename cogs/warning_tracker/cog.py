@@ -84,7 +84,7 @@ class WarningTracker(commands.Cog):
             await interaction.followup.send("You do not have the required staff role to use this command.", ephemeral=True)
             return
 
-        reasons_db = await database.get_all_verbal_reasons()
+        reasons_db = await database.get_all_verbal_reasons(interaction.guild_id or 0)
         if not reasons_db:
             await interaction.followup.send("No verbal reasons configured in the database.", ephemeral=True)
             return
@@ -838,7 +838,7 @@ class WarningTracker(commands.Cog):
         elif action == "edit":
             if not reason:
                 return await interaction.response.send_message("Please select a reason to edit from the autocomplete list.", ephemeral=True)
-            data = await database.get_verbal_reason(reason)
+            data = await database.get_verbal_reason(interaction.guild_id or 0, reason)
             if not data:
                 return await interaction.response.send_message(f"Reason `{reason}` not found.", ephemeral=True)
             modal = VerbalReasonModal("edit", reason_id=reason, default_label=data['label'], default_text=data['text'])
@@ -847,7 +847,7 @@ class WarningTracker(commands.Cog):
         elif action == "remove":
             if not reason:
                 return await interaction.response.send_message("Please select a reason to remove from the autocomplete list.", ephemeral=True)
-            data = await database.get_verbal_reason(reason)
+            data = await database.get_verbal_reason(interaction.guild_id or 0, reason)
             if not data:
                 return await interaction.response.send_message(f"Reason `{reason}` not found.", ephemeral=True)
             
@@ -859,7 +859,7 @@ class WarningTracker(commands.Cog):
     async def verbal_autocomplete(self, interaction: discord.Interaction, current: str):
         action = interaction.namespace.action
         if action in ["edit", "remove"]:
-            reasons = await database.get_all_verbal_reasons()
+            reasons = await database.get_all_verbal_reasons(interaction.guild_id or 0)
             choices = [app_commands.Choice(name=r['label'][:100], value=r['id'][:100]) for r in reasons if current.lower() in r['label'].lower() or current.lower() in r['id'].lower()][:25]
             return choices
         return []

@@ -84,9 +84,20 @@ class RemovalReasonSelect(discord.ui.Select):
                 formatted_list = "\n".join([f"- {reasons_map[v]}" for v in self.values if v in reasons_map])
                 reason = f"Your post has been removed from {chan_mention} due to:\n{formatted_list}"
 
+            guild_name = self.target_message.guild.name if self.target_message.guild else "this server"
+            quoted_reason = "\n".join([f"> {line}" for line in reason.split("\n")])
+            preview_desc = (
+                f"Are you sure you want to remove the post by {self.target_message.author.mention}?\n\n"
+                f"**Preview of DM warning user will receive:**\n"
+                f"```markdown\n"
+                f"### This is your [1st/2nd/3rd] verbal warning\n\n"
+                f"You have received a __verbal warning__ in {guild_name} for:\n"
+                f"{quoted_reason}\n"
+                f"```"
+            )
             confirm_embed = discord.Embed(
                 title="Confirm Post Removal",
-                description=f"Are you sure you want to remove the post by {self.target_message.author.mention}?\n\n**Reason:**\n{reason}",
+                description=preview_desc,
                 color=discord.Color.yellow()
             )
             confirm_view = ConfirmRemovalView(self.target_message, reason, self.cog, interaction)
@@ -122,9 +133,20 @@ class CustomRemovalReasonModal(discord.ui.Modal, title="Reason for removal"):
         else:
             reason = f"Your post has been removed from {chan_mention} due to {custom_reason_sanitized}."
 
+        guild_name = self.target_message.guild.name if self.target_message.guild else "this server"
+        quoted_reason = "\n".join([f"> {line}" for line in reason.split("\n")])
+        preview_desc = (
+            f"Are you sure you want to remove the post by {self.target_message.author.mention}?\n\n"
+            f"**Preview of DM warning user will receive:**\n"
+            f"```markdown\n"
+            f"### This is your [1st/2nd/3rd] verbal warning\n\n"
+            f"You have received a __verbal warning__ in {guild_name} for:\n"
+            f"{quoted_reason}\n"
+            f"```"
+        )
         confirm_embed = discord.Embed(
             title="Confirm Post Removal",
-            description=f"Are you sure you want to remove the post by {self.target_message.author.mention}?\n\n**Reason:**\n{reason}",
+            description=preview_desc,
             color=discord.Color.yellow()
         )
         confirm_view = ConfirmRemovalView(self.target_message, reason, self.cog, interaction)
@@ -149,11 +171,12 @@ class VerbalPreviewView(discord.ui.View):
             item.disabled = True
         await interaction.response.edit_message(view=self)
 
+        guild_id = interaction.guild_id or 0
         if self.action == "remove":
-            await database.delete_verbal_reason(self.reason_id)
+            await database.delete_verbal_reason(guild_id, self.reason_id)
             await interaction.followup.send(f"✅ Verbal reason `{self.reason_id}` has been removed.", ephemeral=True)
         else:
-            await database.add_verbal_reason(self.reason_id, self.label_str, self.text_str)
+            await database.add_verbal_reason(guild_id, self.reason_id, self.label_str, self.text_str)
             await interaction.followup.send(f"✅ Verbal reason `{self.reason_id}` has been saved.", ephemeral=True)
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)

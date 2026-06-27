@@ -334,14 +334,23 @@ async def get_single_warning(request: Request, warning_id: int):
 
 @app.get("/api/guilds/{guild_id}/warning-reasons")
 async def get_warning_reasons(guild_id: int):
-    # For now, verbal reasons are global across the bot
     async with database.aiosqlite.connect(database.DB_NAME) as db:
         db.row_factory = database.aiosqlite.Row
         cursor = await db.execute('''
-            SELECT id, label, text FROM verbal_reasons
-        ''')
+            SELECT id, label, text FROM verbal_reasons WHERE guild_id = ?
+        ''', (guild_id,))
         rows = await cursor.fetchall()
-        return [dict(row) for row in rows]
+        reasons_list = [dict(row) for row in rows]
+        
+        # Fallback to default reasons if the guild doesn't have custom ones configured yet
+        if not reasons_list and guild_id != 0:
+            cursor = await db.execute('''
+                SELECT id, label, text FROM verbal_reasons WHERE guild_id = 0 OR guild_id IS NULL
+            ''')
+            rows = await cursor.fetchall()
+            reasons_list = [dict(row) for row in rows]
+            
+        return reasons_list
 
 @app.get("/api/guilds/{guild_id}/paid-requests")
 async def get_paid_requests(
@@ -721,14 +730,14 @@ class VerbalReasonsUpdate(BaseModel):
 @app.post("/api/guilds/{guild_id}/warning-reasons")
 async def save_warning_reasons(guild_id: int, data: VerbalReasonsUpdate):
     async with database.aiosqlite.connect(database.DB_NAME) as db:
-        # Delete existing reasons
-        await db.execute("DELETE FROM verbal_reasons")
+        # Delete existing reasons for this guild only
+        await db.execute("DELETE FROM verbal_reasons WHERE guild_id = ?", (guild_id,))
         
-        # Insert new reasons
+        # Insert new reasons for this guild
         for r in data.reasons:
             await db.execute('''
-                INSERT INTO verbal_reasons (id, label, text) VALUES (?, ?, ?)
-            ''', (r.id, r.label, r.text))
+                INSERT INTO verbal_reasons (id, label, text, guild_id) VALUES (?, ?, ?, ?)
+            ''', (r.id, r.label, r.text, guild_id))
             
         await db.commit()
     return {"status": "success"}
