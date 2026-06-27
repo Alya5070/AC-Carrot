@@ -1,10 +1,15 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import List, Optional
 import database
+import os
 
 app = FastAPI()
+
+# Mount static files for attachments
+app.mount("/api/attachments", StaticFiles(directory=database.ATTACHMENTS_DIR), name="attachments")
 
 # Enable CORS for Next.js frontend
 app.add_middleware(
@@ -58,7 +63,7 @@ async def health_check():
     return {"status": "ok"}
 
 @app.get("/api/guilds/{guild_id}/warnings")
-async def get_warnings(guild_id: int, limit: int = 50, offset: int = 0):
+async def get_warnings(request: Request, guild_id: int, limit: int = 50, offset: int = 0):
     async with database.aiosqlite.connect(database.DB_NAME) as db:
         db.row_factory = database.aiosqlite.Row
         
@@ -90,12 +95,24 @@ async def get_warnings(guild_id: int, limit: int = 50, offset: int = 0):
             ''', (guild_id,))
             total = (await count_cursor.fetchone())[0]
 
-    # Parse attachments JSON
+    # Parse attachments JSON and build dynamic URLs
+    base_url = str(request.base_url).rstrip('/')
     import json
     for w in warnings:
         if w.get('attachments'):
             try:
-                w['attachments'] = json.loads(w['attachments'])
+                atts = json.loads(w['attachments'])
+                parsed = []
+                for att in atts:
+                    if "stored_filename" in att:
+                        url = f"{base_url}/api/attachments/{att['stored_filename']}"
+                    else:
+                        url = att.get("url")
+                    parsed.append({
+                        "filename": att.get("filename"),
+                        "url": url
+                    })
+                w['attachments'] = parsed
             except Exception:
                 w['attachments'] = []
         else:
@@ -131,7 +148,7 @@ async def get_warnings(guild_id: int, limit: int = 50, offset: int = 0):
     return {"warnings": warnings, "total": total}
 
 @app.get("/api/warnings/{warning_id}")
-async def get_single_warning(warning_id: int):
+async def get_single_warning(request: Request, warning_id: int):
     warn = await database.get_warning_by_id(warning_id)
     if not warn:
         raise HTTPException(status_code=404, detail="Warning not found")
@@ -161,10 +178,22 @@ async def get_single_warning(warning_id: int):
         warn['staff_name'] = f"Staff {warn.get('staff_id')}" if warn.get('staff_id') else "System"
         warn['staff_avatar'] = None
 
+    base_url = str(request.base_url).rstrip('/')
     if warn.get('attachments'):
         import json
         try:
-            warn['attachments'] = json.loads(warn['attachments'])
+            atts = json.loads(warn['attachments'])
+            parsed = []
+            for att in atts:
+                if "stored_filename" in att:
+                    url = f"{base_url}/api/attachments/{att['stored_filename']}"
+                else:
+                    url = att.get("url")
+                parsed.append({
+                    "filename": att.get("filename"),
+                    "url": url
+                })
+            warn['attachments'] = parsed
         except Exception:
             warn['attachments'] = []
     else:

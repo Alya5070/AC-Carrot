@@ -4,8 +4,13 @@ import os
 # Use persistent /data directory if on Railway, otherwise fallback to local file
 if os.path.exists("/data") and os.access("/data", os.W_OK):
     DB_NAME = "/data/database.sqlite"
+    ATTACHMENTS_DIR = "/data/attachments"
 else:
     DB_NAME = "database.sqlite"
+    ATTACHMENTS_DIR = "attachments"
+
+os.makedirs(ATTACHMENTS_DIR, exist_ok=True)
+
 
 async def init_db():
     async with aiosqlite.connect(DB_NAME) as db:

@@ -141,7 +141,23 @@ class WarningTracker(commands.Cog):
                     all_attachments.extend(snapshot.attachments)
 
         import json
-        attachments_data = json.dumps([{"filename": a.filename, "url": a.url} for a in all_attachments]) if all_attachments else None
+        import uuid
+        import os
+        saved_attachments = []
+        for a in all_attachments:
+            try:
+                ext = os.path.splitext(a.filename)[1]
+                unique_filename = f"{uuid.uuid4()}{ext}"
+                file_path = os.path.join(database.ATTACHMENTS_DIR, unique_filename)
+                await a.save(file_path)
+                saved_attachments.append({
+                    "filename": a.filename,
+                    "stored_filename": unique_filename
+                })
+            except Exception as e:
+                print(f"Failed to download/save attachment {a.filename}: {e}")
+                
+        attachments_data = json.dumps(saved_attachments) if saved_attachments else None
         
         warn_id = await database.add_warning(
             user_id=message.author.id,
@@ -382,7 +398,23 @@ class WarningTracker(commands.Cog):
                         all_attachments.extend(snapshot.attachments)
 
             import json
-            attachments_data = json.dumps([{"filename": a.filename, "url": a.url} for a in all_attachments]) if all_attachments else None
+            import uuid
+            import os
+            saved_attachments = []
+            for a in all_attachments:
+                try:
+                    ext = os.path.splitext(a.filename)[1]
+                    unique_filename = f"{uuid.uuid4()}{ext}"
+                    file_path = os.path.join(database.ATTACHMENTS_DIR, unique_filename)
+                    await a.save(file_path)
+                    saved_attachments.append({
+                        "filename": a.filename,
+                        "stored_filename": unique_filename
+                    })
+                except Exception as e:
+                    print(f"Failed to download/save attachment {a.filename}: {e}")
+                    
+            attachments_data = json.dumps(saved_attachments) if saved_attachments else None
 
             # Add warning to database (saving message content)
             await database.add_warning(
@@ -668,7 +700,23 @@ class WarningTracker(commands.Cog):
                                 all_attachments.extend(snapshot.attachments)
 
                     import json
-                    attachments_data = json.dumps([{"filename": a.filename, "url": a.url} for a in all_attachments]) if all_attachments else None
+                    import uuid
+                    import os
+                    saved_attachments = []
+                    for a in all_attachments:
+                        try:
+                            ext = os.path.splitext(a.filename)[1]
+                            unique_filename = f"{uuid.uuid4()}{ext}"
+                            file_path = os.path.join(database.ATTACHMENTS_DIR, unique_filename)
+                            await a.save(file_path)
+                            saved_attachments.append({
+                                "filename": a.filename,
+                                "stored_filename": unique_filename
+                            })
+                        except Exception as e:
+                            print(f"Failed to download/save attachment {a.filename}: {e}")
+                            
+                    attachments_data = json.dumps(saved_attachments) if saved_attachments else None
 
                     await database.add_warning(
                         user_id=user.id, 
