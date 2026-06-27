@@ -424,8 +424,20 @@ async def purge_paid_requests(guild_id: int):
     async with database.aiosqlite.connect(database.DB_NAME) as db:
         if guild_id == 0:
             await db.execute("DELETE FROM paid_requests")
+            try:
+                await db.execute("DELETE FROM sqlite_sequence WHERE name='paid_requests'")
+            except database.aiosqlite.OperationalError:
+                pass
         else:
             await db.execute("DELETE FROM paid_requests WHERE guild_id = ?", (guild_id,))
+            # Reset ID counter if no requests are left in the database at all
+            cursor = await db.execute("SELECT COUNT(*) FROM paid_requests")
+            count = (await cursor.fetchone())[0]
+            if count == 0:
+                try:
+                    await db.execute("DELETE FROM sqlite_sequence WHERE name='paid_requests'")
+                except database.aiosqlite.OperationalError:
+                    pass
         await db.commit()
     return {"status": "success"}
 
