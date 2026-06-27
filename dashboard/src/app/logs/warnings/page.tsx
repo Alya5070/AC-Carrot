@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 
 import { ShieldAlert, Search, Trash2, RefreshCw, Clock, MessageSquare, ExternalLink, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Filter } from "lucide-react";
 import ReactMarkdown from "react-markdown";
@@ -38,7 +38,12 @@ export default function WarningsPage() {
   const [totalCount, setTotalCount] = useState(0);
 
   const fetchWarnings = () => {
-    if (!selectedGuildId || selectedGuildId === "0") return;
+    if (!selectedGuildId || selectedGuildId === "0") {
+      setWarnings([]);
+      setTotalCount(0);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
     const params = new URLSearchParams({
@@ -62,10 +67,16 @@ export default function WarningsPage() {
       });
   };
 
+  // Reset data and page when server changes
   useEffect(() => {
-    if (selectedGuildId) {
-      fetchWarnings();
-    }
+    setWarnings([]);
+    setTotalCount(0);
+    setCurrentPage(1);
+    setSelectedWarning(null);
+  }, [selectedGuildId]);
+
+  useEffect(() => {
+    fetchWarnings();
   }, [selectedGuildId, currentPage, itemsPerPage, sortConfig, searchQuery, staffFilter]);
 
   const processedWarnings = warnings;

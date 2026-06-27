@@ -41,10 +41,22 @@ export default function OverviewPage() {
   const { selectedGuildId } = useGuild();
 
   useEffect(() => {
-    if (!selectedGuildId || selectedGuildId === "0") return;
-    
+    if (!selectedGuildId || selectedGuildId === "0") {
+      setStats({
+        bot_status: "--",
+        ping: "--",
+        pending_requests: 0,
+        verbals_this_week: 0,
+        verbals_trend: "--",
+        active_reminders: 0
+      });
+      setRecentWarnings([]);
+      setRecentRequests([]);
+      return;
+    }
+
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-    
+
     // Fetch Stats
     fetch(`${apiUrl}/api/guilds/${selectedGuildId}/stats`)
       .then((res) => res.json())
@@ -62,7 +74,7 @@ export default function OverviewPage() {
       .then((res) => res.json())
       .then((data) => setRecentRequests(data.requests || []))
       .catch((err) => console.error("Error fetching requests:", err));
-      
+
   }, [selectedGuildId]);
 
   return (

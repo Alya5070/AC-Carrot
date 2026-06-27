@@ -5,33 +5,36 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { useGuild } from "../context/GuildContext";
 
 export function OverviewChart() {
-  const { selectedGuildId } = useGuild();
-  const [data, setData] = useState([]);
+  const { selectedGuildId, loading: guildLoading } = useGuild();
+  const [data, setData] = useState<any[]>([]);
   const [period, setPeriod] = useState<"week" | "month" | "year">("month");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!selectedGuildId) return; // allow "0" for global analytics
-    
+    // Wait for guild context to finish loading, and require a real guild ID.
+    if (guildLoading || !selectedGuildId || selectedGuildId === "0") {
+      setLoading(false);
+      setData([]);
+      return;
+    }
+
     setLoading(true);
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-    
+
     fetch(`${apiUrl}/api/guilds/${selectedGuildId}/analytics?period=${period}`)
       .then(res => res.json())
-      .then(data => {
-        // Format dates for display
-        const formattedData = (data.data || []).map((item: any) => {
+      .then(raw => {
+        // Support both { data: [...] } and a bare array response shape
+        const items: any[] = Array.isArray(raw) ? raw : (raw.data || []);
+        const formattedData = items.map((item: any) => {
           const date = new Date(item.date);
           return {
             ...item,
-            displayDate: period === "year" 
+            displayDate: period === "year"
               ? date.toLocaleDateString('en-US', { month: 'short' })
               : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
           };
         });
-        
-        // If year, we should group by month in the frontend or just show all points.
-        // For simplicity, we just display the points.
         setData(formattedData);
         setLoading(false);
       })
@@ -39,7 +42,7 @@ export function OverviewChart() {
         console.error("Error fetching analytics:", err);
         setLoading(false);
       });
-  }, [selectedGuildId, period]);
+  }, [selectedGuildId, guildLoading, period]);
 
   return (
     <div className="glass-panel border border-white/5 rounded-xl p-6 h-[400px] flex flex-col">

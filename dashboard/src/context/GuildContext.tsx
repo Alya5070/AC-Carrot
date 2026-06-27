@@ -19,7 +19,7 @@ const GuildContext = createContext<GuildContextType | undefined>(undefined);
 
 export function GuildProvider({ children }: { children: ReactNode }) {
   const [guilds, setGuilds] = useState<GuildInfo[]>([]);
-  const [selectedGuildId, setSelectedGuildId] = useState<string>("0");
+  const [selectedGuildId, setSelectedGuildId] = useState<string>("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

@@ -28,7 +28,11 @@ export default function RemindersPage() {
   const [sortConfig, setSortConfig] = useState<{ key: keyof Reminder; direction: 'asc' | 'desc' }>({ key: 'remind_at', direction: 'asc' });
 
   const fetchReminders = () => {
-    if (!selectedGuildId || selectedGuildId === "0") return;
+    if (!selectedGuildId || selectedGuildId === "0") {
+      setReminders([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
     fetch(`${apiUrl}/api/guilds/${selectedGuildId}/reminders`)
@@ -43,20 +47,25 @@ export default function RemindersPage() {
       });
   };
 
+  // Reset data and page when server changes
   useEffect(() => {
-    if (selectedGuildId && selectedGuildId !== "0") {
-      fetchReminders();
-    }
+    setReminders([]);
+    setCurrentPage(1);
+    setSelectedReminder(null);
+  }, [selectedGuildId]);
+
+  useEffect(() => {
+    fetchReminders();
   }, [selectedGuildId]);
 
   const deleteReminder = async (id: number) => {
     if (!confirm("Are you sure you want to delete this reminder?")) return;
-    
+
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
     try {
-      const res = await fetch(`${apiUrl}/api/reminders/${id}`, { method: "DELETE" });
+      const res = await fetch(`${apiUrl}/api/guilds/${selectedGuildId}/reminders/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Delete failed");
-      
+
       setReminders(reminders.filter(r => r.id !== id));
       if (selectedReminder?.id === id) setSelectedReminder(null);
     } catch (err) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { CreditCard, Search, RefreshCw, X, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Filter } from "lucide-react";
 import { useGuild } from "../../../context/GuildContext";
 
@@ -32,7 +32,12 @@ export default function RequestsPage() {
   const [totalCount, setTotalCount] = useState(0);
 
   const fetchRequests = () => {
-    if (!selectedGuildId) return; // allow "0"
+    if (!selectedGuildId || selectedGuildId === "0") {
+      setRequests([]);
+      setTotalCount(0);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
     const params = new URLSearchParams({
@@ -56,40 +61,17 @@ export default function RequestsPage() {
       });
   };
 
+  // Reset data and page when server changes
   useEffect(() => {
-    if (selectedGuildId && selectedGuildId !== "0") {
-      fetchRequests();
-    }
+    setRequests([]);
+    setTotalCount(0);
+    setCurrentPage(1);
+    setSelectedRequest(null);
+  }, [selectedGuildId]);
+
+  useEffect(() => {
+    fetchRequests();
   }, [selectedGuildId, currentPage, itemsPerPage, sortConfig, searchQuery, statusFilter]);
-
-  const processedRequests = useMemo(() => {
-    // 1. Filter
-    let filtered = requests.filter((r) => {
-      const query = searchQuery.toLowerCase();
-      const matchesSearch = (r.user_name || "").toLowerCase().includes(query) ||
-        (r.user_id || "").toString().includes(query) ||
-        (r.payment_method || "").toLowerCase().includes(query) ||
-        (r.status || "").toLowerCase().includes(query);
-      
-      const matchesStatus = statusFilter === "All" || r.status.toLowerCase() === statusFilter.toLowerCase();
-      return matchesSearch && matchesStatus;
-    });
-
-    // 2. Sort
-    filtered.sort((a, b) => {
-      let aValue = a[sortConfig.key];
-      let bValue = b[sortConfig.key];
-      
-      if (aValue === null) aValue = "";
-      if (bValue === null) bValue = "";
-      
-      if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
-      if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
-      return 0;
-    });
-
-    return filtered;
-  }, [requests, searchQuery, statusFilter, sortConfig]);
 
   // Pagination boundaries
   const totalPages = Math.ceil(totalCount / itemsPerPage) || 1;

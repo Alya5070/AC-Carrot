@@ -45,7 +45,10 @@ export default function SettingsPage() {
   const { selectedGuildId } = useGuild();
 
   useEffect(() => {
-    if (!selectedGuildId || selectedGuildId === "0") return;
+    if (!selectedGuildId || selectedGuildId === "0") {
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -132,10 +135,19 @@ export default function SettingsPage() {
   const handlePurge = async () => {
     if (confirm("WARNING: This will permanently delete ALL paid requests from the database. Are you absolutely sure?")) {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      await fetch(`${apiUrl}/api/paid-requests/purge`, { method: "POST" });
+      await fetch(`${apiUrl}/api/guilds/${selectedGuildId}/paid-requests/purge`, { method: "POST" });
       alert("Paid requests have been purged.");
     }
   };
+
+  if (!selectedGuildId || selectedGuildId === "0") {
+    return (
+      <div className="flex items-center justify-center h-64 text-gray-400 flex-col gap-3">
+        <Settings className="w-10 h-10 text-teal-700/50" />
+        <p className="text-sm">Select a server from the top bar to view its settings.</p>
+      </div>
+    );
+  }
 
   if (loading || !config) {
     return (
