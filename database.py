@@ -42,6 +42,20 @@ async def init_db():
             await db.commit()
         except aiosqlite.OperationalError:
             pass # Column already exists
+
+        # Safe migration if database already exists without guild_id
+        try:
+            await db.execute('ALTER TABLE warnings ADD COLUMN guild_id INTEGER')
+            await db.commit()
+        except aiosqlite.OperationalError:
+            pass # Column already exists
+
+        # Safe migration if database already exists without post_created_at
+        try:
+            await db.execute('ALTER TABLE warnings ADD COLUMN post_created_at TIMESTAMP')
+            await db.commit()
+        except aiosqlite.OperationalError:
+            pass # Column already exists
             
         await db.execute('''
             CREATE TABLE IF NOT EXISTS paid_requests (
@@ -55,9 +69,32 @@ async def init_db():
                 status TEXT DEFAULT 'pending',
                 staff_review_msg_id INTEGER,
                 approved_msg_id INTEGER,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_reminded_at TIMESTAMP,
+                dm_msg_id INTEGER,
+                reminder_msg_id INTEGER
             )
         ''')
+        
+        try:
+            await db.execute('ALTER TABLE paid_requests ADD COLUMN last_reminded_at TIMESTAMP')
+            await db.commit()
+        except aiosqlite.OperationalError:
+            pass # Column already exists
+
+        try:
+            await db.execute('ALTER TABLE paid_requests ADD COLUMN dm_msg_id INTEGER')
+            await db.commit()
+        except aiosqlite.OperationalError:
+            pass # Column already exists
+
+        try:
+            await db.execute('ALTER TABLE paid_requests ADD COLUMN reminder_msg_id INTEGER')
+            await db.commit()
+        except aiosqlite.OperationalError:
+            pass # Column already exists
+
+
         
         await db.execute('''
             CREATE TABLE IF NOT EXISTS reaction_roles (
@@ -89,10 +126,71 @@ async def init_db():
         ''')
 
         await db.execute('''
+            CREATE TABLE IF NOT EXISTS reminders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                about TEXT NOT NULL,
+                remind_at TIMESTAMP NOT NULL,
+                channel_id INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        await db.execute('''
             CREATE TABLE IF NOT EXISTS verbal_reasons (
                 id TEXT PRIMARY KEY,
                 label TEXT NOT NULL,
                 text TEXT NOT NULL
+            )
+        ''')
+        
+        # Safe migration if database already exists without guild_id in verbal_reasons
+        try:
+            await db.execute('ALTER TABLE verbal_reasons ADD COLUMN guild_id INTEGER')
+            await db.commit()
+        except aiosqlite.OperationalError:
+            pass # Column already exists
+            
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS guild_configs (
+                guild_id INTEGER PRIMARY KEY,
+                staff_notice_channel_id INTEGER,
+                staff_commands_channel_id INTEGER,
+                staff_log_channel_id INTEGER,
+                team_leader_role_id INTEGER,
+                moderator_role_id INTEGER,
+                trial_moderator_role_id INTEGER,
+                submit_channel_id INTEGER,
+                review_channel_id INTEGER,
+                approved_channel_id INTEGER,
+                approval_log_channel_id INTEGER,
+                active_limit INTEGER DEFAULT 2,
+                reminder_threshold INTEGER DEFAULT 14,
+                accepted_currencies TEXT DEFAULT 'USD, EUR, GBP, CAD, AUD, \\$|£|€',
+                accepted_payments TEXT DEFAULT 'PayPal, Stripe, CashApp, Venmo, Ko-Fi',
+                banned_terms_regex TEXT DEFAULT 'robux|robuck|robucks|crypto|btc|eth|sol|ltc|usdt|usdc'
+            )
+        ''')
+        
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS chatbot_menus (
+                guild_id INTEGER,
+                menu_id TEXT,
+                response_text TEXT NOT NULL,
+                PRIMARY KEY (guild_id, menu_id)
+            )
+        ''')
+
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS chatbot_buttons (
+                guild_id INTEGER,
+                menu_id TEXT,
+                button_index INTEGER,
+                label TEXT NOT NULL,
+                emoji TEXT,
+                action TEXT NOT NULL,
+                target_content TEXT NOT NULL,
+                PRIMARY KEY (guild_id, menu_id, button_index)
             )
         ''')
         
@@ -140,21 +238,84 @@ async def delete_verbal_reason(reason_id: str):
         await db.execute("DELETE FROM verbal_reasons WHERE id = ?", (reason_id,))
         await db.commit()
 
+async def get_guild_config(guild_id: int):
+    """Fetch configuration for a guild, or fallback to defaults."""
+    async with aiosqlite.connect(DB_NAME) as db:
+        db.row_factory = aiosqlite.Row
+        
+        if guild_id == 0:
+            cursor = await db.execute("SELECT * FROM guild_configs LIMIT 1")
+        else:
+            cursor = await db.execute("SELECT * FROM guild_configs WHERE guild_id = ?", (guild_id,))
+            
+        row = await cursor.fetchone()
+        if row:
+            return dict(row)
+            
+        # Return sensible defaults if no config is set
+        return {
+            "staff_notice_channel_id": 0,
+            "staff_commands_channel_id": 0,
+            "staff_log_channel_id": 0,
+            "team_leader_role_id": 0,
+            "moderator_role_id": 0,
+            "trial_moderator_role_id": 0,
+            "submit_channel_id": 0,
+            "review_channel_id": 0,
+            "approved_channel_id": 0,
+            "approval_log_channel_id": 0,
+            "active_limit": 2,
+            "reminder_threshold": 14,
+            "accepted_currencies": "USD, EUR, GBP, CAD, AUD, \\$|£|€",
+            "accepted_payments": "PayPal, Stripe, CashApp, Venmo, Ko-Fi",
+            "banned_terms_regex": "robux|robuck|robucks|crypto|btc|eth|sol|ltc|usdt|usdc"
+        }
+
+async def migrate_env_to_db(guild_id: int):
+    """One-time migration to copy .env variables into the database for the given guild if empty."""
+    async with aiosqlite.connect(DB_NAME) as db:
+        cursor = await db.execute("SELECT COUNT(*) FROM guild_configs WHERE guild_id = ?", (guild_id,))
+        count = (await cursor.fetchone())[0]
+        if count == 0:
+            import os
+            # Read from os.environ since load_dotenv() was called in bot.py
+            await db.execute('''
+                INSERT INTO guild_configs (
+                    guild_id, 
+                    staff_notice_channel_id, staff_commands_channel_id, staff_log_channel_id,
+                    team_leader_role_id, moderator_role_id, trial_moderator_role_id,
+                    submit_channel_id, review_channel_id, approved_channel_id, approval_log_channel_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                guild_id,
+                int(os.getenv("STAFF_NOTICE_CHANNEL_ID") or 0),
+                int(os.getenv("STAFF_COMMANDS_CHANNEL_ID") or 0),
+                int(os.getenv("STAFF_LOG_CHANNEL_ID") or 0),
+                int(os.getenv("TEAM_LEADER_ROLE_ID") or 0),
+                int(os.getenv("MODERATOR_ROLE_ID") or 0),
+                int(os.getenv("TRIAL_MODERATOR_ROLE_ID") or 0),
+                int(os.getenv("SUBMIT_PAID_REQUEST_CHANNEL_ID") or 0),
+                int(os.getenv("PAID_REQUEST_REVIEW_CHANNEL_ID") or 0),
+                int(os.getenv("PAID_REQUEST_APPROVED_CHANNEL_ID") or 0),
+                int(os.getenv("APPROVAL_LOG_CHANNEL_ID") or 0)
+            ))
+            await db.commit()
+            print(f"Migrated .env config to database for guild {guild_id}")
 
 # --- Warning Tracker Methods ---
 
-async def add_warning(user_id: int, channel_id: int, message_id: int, message_content: str, staff_id: int = None, reason: str = None, warned_at: str = None):
+async def add_warning(user_id: int, channel_id: int, message_id: int, message_content: str, staff_id: int = None, reason: str = None, warned_at: str = None, post_created_at: str = None, guild_id: int = None):
     async with aiosqlite.connect(DB_NAME) as db:
         if warned_at:
             cursor = await db.execute('''
-                INSERT INTO warnings (user_id, channel_id, message_id, message_content, staff_id, reason, warned_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', (user_id, channel_id, message_id, message_content, staff_id, reason, warned_at))
+                INSERT INTO warnings (user_id, channel_id, message_id, message_content, staff_id, reason, warned_at, post_created_at, guild_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (user_id, channel_id, message_id, message_content, staff_id, reason, warned_at, post_created_at, guild_id))
         else:
             cursor = await db.execute('''
-                INSERT INTO warnings (user_id, channel_id, message_id, message_content, staff_id, reason)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (user_id, channel_id, message_id, message_content, staff_id, reason))
+                INSERT INTO warnings (user_id, channel_id, message_id, message_content, staff_id, reason, post_created_at, guild_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (user_id, channel_id, message_id, message_content, staff_id, reason, post_created_at, guild_id))
         await db.commit()
         return cursor.lastrowid
 
@@ -208,18 +369,17 @@ async def get_last_warning_staff_id_last_3_months(user_id: int):
         row = await cursor.fetchone()
         return row[0] if row else None
 
-async def get_last_3_warnings(user_id: int):
+async def get_warnings_last_3_months(user_id: int):
     async with aiosqlite.connect(DB_NAME) as db:
         db.row_factory = aiosqlite.Row
-        # Fetch the last 3 warnings within 3 months
+        # Fetch all warnings within 3 months
         cursor = await db.execute('''
-            SELECT message_content, warned_at FROM warnings
+            SELECT id, message_content, warned_at FROM warnings
             WHERE user_id = ? AND warned_at >= datetime('now', '-3 months')
             ORDER BY warned_at DESC
-            LIMIT 3
         ''', (user_id,))
         rows = await cursor.fetchall()
-        return [(row['message_content'], row['warned_at']) for row in rows if row['message_content']]
+        return [(row['id'], row['message_content'], row['warned_at']) for row in rows if row['message_content']]
 
 async def get_warnings_paginated(user_id: int, limit: int, offset: int):
     async with aiosqlite.connect(DB_NAME) as db:
@@ -324,6 +484,77 @@ async def get_last_submitted_request(user_id: int):
         ''', (user_id,))
         return await cursor.fetchone()
 
+async def get_paid_requests_for_reminders(age_days: float = 30.0) -> list:
+    async with aiosqlite.connect(DB_NAME) as db:
+        db.row_factory = aiosqlite.Row
+        # Calculate time threshold in seconds
+        seconds = int(age_days * 86400.0)
+        cursor = await db.execute('''
+            SELECT * FROM paid_requests
+            WHERE status = 'approved'
+              AND datetime(created_at) < datetime('now', ?)
+              AND (last_reminded_at IS NULL OR datetime(last_reminded_at) < datetime('now', ?))
+        ''', (f'-{seconds} seconds', f'-{seconds} seconds'))
+        return await cursor.fetchall()
+
+async def update_paid_request_reminded_time(request_id: int):
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute('''
+            UPDATE paid_requests
+            SET last_reminded_at = CURRENT_TIMESTAMP
+            WHERE request_id = ?
+        ''', (request_id,))
+        await db.commit()
+
+async def update_paid_request_dm_msg(request_id: int, dm_msg_id: int):
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute('''
+            UPDATE paid_requests
+            SET dm_msg_id = ?
+            WHERE request_id = ?
+        ''', (dm_msg_id, request_id))
+        await db.commit()
+
+async def update_paid_request_reminder_msg(request_id: int, reminder_msg_id: int):
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute('''
+            UPDATE paid_requests
+            SET reminder_msg_id = ?
+            WHERE request_id = ?
+        ''', (reminder_msg_id, request_id))
+        await db.commit()
+
+
+async def get_active_paid_requests_count(user_id: int) -> int:
+    async with aiosqlite.connect(DB_NAME) as db:
+        cursor = await db.execute('''
+            SELECT COUNT(*) FROM paid_requests
+            WHERE user_id = ? AND status IN ('pending', 'approved')
+        ''', (user_id,))
+        row = await cursor.fetchone()
+        return row[0] if row else 0
+
+async def get_pending_paid_requests() -> list:
+    async with aiosqlite.connect(DB_NAME) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM paid_requests WHERE status = 'pending'")
+        return await cursor.fetchall()
+
+async def purge_all_paid_requests():
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute("DELETE FROM paid_requests")
+        await db.execute("DELETE FROM sqlite_sequence WHERE name = 'paid_requests'")
+        await db.commit()
+
+async def purge_all_warnings():
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute("DELETE FROM warnings")
+        await db.execute("DELETE FROM sqlite_sequence WHERE name = 'warnings'")
+        await db.commit()
+
+
+
+
 # --- Reaction Roles Methods ---
 
 async def add_reaction_role(message_id: int, guild_id: int, emoji: str, role_id: int):
@@ -398,5 +629,30 @@ async def delete_dropdowns_for_message(message_id: int):
             await db.execute('DELETE FROM dropdown_options WHERE menu_id = ?', (menu_id,))
             
         await db.execute('DELETE FROM dropdown_menus WHERE message_id = ?', (message_id,))
+        await db.commit()
+
+# --- Reminders Methods ---
+
+async def add_reminder(user_id: int, about: str, remind_at: str, channel_id: int = None) -> int:
+    async with aiosqlite.connect(DB_NAME) as db:
+        cursor = await db.execute('''
+            INSERT INTO reminders (user_id, about, remind_at, channel_id)
+            VALUES (?, ?, ?, ?)
+        ''', (user_id, about, remind_at, channel_id))
+        await db.commit()
+        return cursor.lastrowid
+
+async def get_due_reminders() -> list:
+    async with aiosqlite.connect(DB_NAME) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute('''
+            SELECT * FROM reminders WHERE remind_at <= datetime('now')
+        ''')
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+async def delete_reminder(reminder_id: int):
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute('DELETE FROM reminders WHERE id = ?', (reminder_id,))
         await db.commit()
 

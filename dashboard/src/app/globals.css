@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+@theme {
+  --color-teal-100: #e6f6f5;
+  --color-teal-200: #c1e8e5;
+  --color-teal-300: #93d5cf;
+  --color-teal-400: #5cbdb4;
+  --color-teal-500: #38a39a;
+  --color-teal-600: #29827c;
+  --color-teal-700: #246a66;
+  --color-teal-800: #215452;
+  --color-teal-900: #1e4544;
+  --color-teal-950: #0f2828;
+
+  --color-surface-dark: #121212;
+  --color-surface-darker: #0a0a0a;
+  --color-surface-card: #1e1e1e;
+  --color-surface-hover: #2a2a2a;
+}
+
+@layer base {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.glass-panel {
+  background: rgba(30, 30, 30, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+}
+
+.text-gradient {
+  background: linear-gradient(to right, #38a39a, #93d5cf);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}

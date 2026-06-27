@@ -16,6 +16,8 @@ import os
 from dotenv import load_dotenv
 import database
 import asyncio
+import uvicorn
+import api
 
 load_dotenv()
 
@@ -38,13 +40,23 @@ class ACCarrotBot(commands.Bot):
         await self.load_extension("cogs.paid_request")
         await self.load_extension("cogs.chatbot")
         await self.load_extension("cogs.message_builder")
+        await self.load_extension("cogs.reminders")
         print("Cogs loaded.")
+        
+        # Start FastAPI server alongside Discord bot
+        api.set_bot_client(self)
+        port = int(os.environ.get("PORT", 8000))
+        config = uvicorn.Config(api.app, host="0.0.0.0", port=port, log_level="info")
+        server = uvicorn.Server(config)
+        self.loop.create_task(server.serve())
+        print("FastAPI server started on port 8000.")
         
     async def on_ready(self):
         print(f"Logged in as {self.user} (ID: {self.user.id})")
         try:
             # Clear guild-specific commands to remove previous duplicates
             for guild in self.guilds:
+                await database.migrate_env_to_db(guild.id)
                 self.tree.clear_commands(guild=guild)
                 await self.tree.sync(guild=guild)
                 
