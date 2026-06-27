@@ -60,6 +60,7 @@ async def init_db():
         await db.execute('''
             CREATE TABLE IF NOT EXISTS paid_requests (
                 request_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                guild_id INTEGER,
                 user_id INTEGER NOT NULL,
                 budget TEXT NOT NULL,
                 sfw_nsfw TEXT NOT NULL,
@@ -90,6 +91,12 @@ async def init_db():
 
         try:
             await db.execute('ALTER TABLE paid_requests ADD COLUMN reminder_msg_id INTEGER')
+            await db.commit()
+        except aiosqlite.OperationalError:
+            pass # Column already exists
+
+        try:
+            await db.execute('ALTER TABLE paid_requests ADD COLUMN guild_id INTEGER')
             await db.commit()
         except aiosqlite.OperationalError:
             pass # Column already exists
@@ -436,12 +443,12 @@ async def get_warnings_by_staff_count(staff_id: int) -> int:
 
 # --- Paid Request Methods ---
 
-async def create_paid_request(user_id: int, budget: str, sfw_nsfw: str, payment_method: str, use_case: str, content: str) -> int:
+async def create_paid_request(guild_id: int, user_id: int, budget: str, sfw_nsfw: str, payment_method: str, use_case: str, content: str) -> int:
     async with aiosqlite.connect(DB_NAME) as db:
         cursor = await db.execute('''
-            INSERT INTO paid_requests (user_id, budget, sfw_nsfw, payment_method, use_case, content)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (user_id, budget, sfw_nsfw, payment_method, use_case, content))
+            INSERT INTO paid_requests (guild_id, user_id, budget, sfw_nsfw, payment_method, use_case, content)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (guild_id, user_id, budget, sfw_nsfw, payment_method, use_case, content))
         await db.commit()
         return cursor.lastrowid
 

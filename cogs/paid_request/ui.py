@@ -219,6 +219,7 @@ class PaidRequestModal(discord.ui.Modal):
                 )
                 return
             req_id = await database.create_paid_request(
+                interaction.guild_id,
                 interaction.user.id,
                 budget_val,
                 sfw_nsfw_val,

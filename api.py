@@ -78,7 +78,7 @@ async def get_warnings(guild_id: int, limit: int = 50, offset: int = 0):
             cursor = await db.execute('''
                 SELECT id, user_id, warned_at, channel_id, message_id, message_content, staff_id, reason, post_created_at 
                 FROM warnings
-                WHERE guild_id = ? OR guild_id IS NULL
+                WHERE guild_id = ?
                 ORDER BY warned_at DESC
                 LIMIT ? OFFSET ?
             ''', (guild_id, limit, offset))
@@ -86,7 +86,7 @@ async def get_warnings(guild_id: int, limit: int = 50, offset: int = 0):
             warnings = [dict(row) for row in rows]
             
             count_cursor = await db.execute('''
-                SELECT COUNT(*) FROM warnings WHERE guild_id = ? OR guild_id IS NULL
+                SELECT COUNT(*) FROM warnings WHERE guild_id = ?
             ''', (guild_id,))
             total = (await count_cursor.fetchone())[0]
 
@@ -255,14 +255,23 @@ async def get_analytics(guild_id: int, period: str = "month"):
             """, (guild_id,))
         warn_rows = await w_cursor.fetchall()
         
-        # Get paid requests grouped by date (paid_requests doesn't have guild_id, so we ignore it here)
-        p_cursor = await db.execute(f"""
-            SELECT date(created_at) as day, COUNT(*) as count 
-            FROM paid_requests 
-            WHERE date(created_at) >= date('now', '-{days} days')
-            GROUP BY date(created_at)
-            ORDER BY day ASC
-        """)
+        # Get paid requests grouped by date, scoped to guild
+        if guild_id == 0:
+            p_cursor = await db.execute(f"""
+                SELECT date(created_at) as day, COUNT(*) as count 
+                FROM paid_requests 
+                WHERE date(created_at) >= date('now', '-{days} days')
+                GROUP BY date(created_at)
+                ORDER BY day ASC
+            """)
+        else:
+            p_cursor = await db.execute(f"""
+                SELECT date(created_at) as day, COUNT(*) as count 
+                FROM paid_requests 
+                WHERE guild_id = ? AND date(created_at) >= date('now', '-{days} days')
+                GROUP BY date(created_at)
+                ORDER BY day ASC
+            """, (guild_id,))
         paid_rows = await p_cursor.fetchall()
         
         # Merge them into a single timeline array for Recharts
