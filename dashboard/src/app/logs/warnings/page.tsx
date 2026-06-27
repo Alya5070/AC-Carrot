@@ -241,20 +241,7 @@ export default function WarningsPage() {
                       >
                         View Details
                       </button>
-                      <button
-                        onClick={async () => {
-                          try {
-                            await sendLogToChannel(selectedGuildId ?? "0", "warning", w.id.toString());
-                            alert("Log sent to channel");
-                          } catch (e) {
-                            console.error(e);
-                            alert("Failed to send log");
-                          }
-                        }}
-                        className="ml-2 text-teal-400 hover:text-teal-300 bg-teal-500/10 hover:bg-teal-500/20 px-3 py-1.5 rounded text-xs font-medium transition-colors"
-                      >
-                        Send to Channel
-                      </button>
+
                     </td>
                   </tr>
                 ))
