@@ -290,10 +290,20 @@ async def get_guilds():
     if bot_client:
         return {"guilds": [{"id": str(g.id), "name": g.name, "icon": g.icon.url if g.icon else None} for g in bot_client.guilds]}
     else:
+        # Bot not attached — collect distinct non-zero guild IDs from all relevant tables
         async with database.aiosqlite.connect(database.DB_NAME) as db:
-            cursor = await db.execute("SELECT DISTINCT guild_id FROM guild_configs WHERE guild_id != 0")
-            rows = await cursor.fetchall()
-            return {"guilds": [{"id": str(row[0]), "name": f"Server {row[0]}", "icon": None} for row in rows]}
+            guild_ids = set()
+
+            for table, col in [("guild_configs", "guild_id"), ("warnings", "guild_id"), ("paid_requests", "guild_id")]:
+                try:
+                    cursor = await db.execute(f"SELECT DISTINCT {col} FROM {table} WHERE {col} IS NOT NULL AND {col} != 0")
+                    rows = await cursor.fetchall()
+                    guild_ids.update(row[0] for row in rows)
+                except Exception:
+                    pass  # table may not exist yet
+
+            return {"guilds": [{"id": str(gid), "name": f"Server {gid}", "icon": None} for gid in sorted(guild_ids)]}
+
 
 @app.get("/api/guilds/{guild_id}/config")
 async def get_config(guild_id: int):
