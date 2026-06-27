@@ -253,7 +253,6 @@ function WarningsPageContent() {
                 <th className="px-6 py-4 cursor-pointer hover:bg-teal-900/20 group select-none transition-colors" onClick={() => handleSort('warned_at')}>
                   <div className="flex items-center gap-1">Date <SortIcon columnKey="warned_at" /></div>
                 </th>
-                <th className="px-6 py-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-teal-900/20 bg-surface-dark/40">
@@ -274,7 +273,11 @@ function WarningsPageContent() {
                 </tr>
               ) : (
                 currentWarnings.map((w) => (
-                  <tr key={w.id} className="hover:bg-teal-900/10 transition-colors group">
+                  <tr 
+                    key={w.id} 
+                    className="hover:bg-teal-900/10 transition-colors group cursor-pointer"
+                    onClick={() => setSelectedWarning(w)}
+                  >
                     <td className="px-6 py-4 text-gray-400 font-mono">#{w.id}</td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
@@ -310,15 +313,6 @@ function WarningsPageContent() {
                     </td>
                     <td className="px-6 py-4 text-gray-400 whitespace-nowrap">
                       {new Date(w.warned_at + "Z").toLocaleString()}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <button 
-                        onClick={() => setSelectedWarning(w)}
-                        className="text-teal-400 hover:text-teal-300 bg-teal-500/10 hover:bg-teal-500/20 px-3 py-1.5 rounded text-xs font-medium transition-colors"
-                      >
-                        View Details
-                      </button>
-
                     </td>
                   </tr>
                 ))

@@ -58,6 +58,46 @@ async def get_cached_user(user_id):
         
     return None
 
+async def get_guild_staff_names(guild_id: int) -> list[str]:
+    if not bot_client or guild_id == 0:
+        return []
+    guild = bot_client.get_guild(guild_id)
+    if not guild:
+        try:
+            guild = await bot_client.fetch_guild(guild_id)
+        except Exception:
+            return []
+            
+    config = await database.get_guild_config(guild_id)
+    staff_role_ids = []
+    for k in ["team_leader_role_id", "moderator_role_id", "trial_moderator_role_id"]:
+        role_val = config.get(k)
+        if role_val:
+            try:
+                staff_role_ids.append(int(role_val))
+            except (ValueError, TypeError):
+                pass
+                
+    if not staff_role_ids:
+        return []
+        
+    staff_names = []
+    
+    # Try using guild.members if available
+    members = guild.members
+    if not members or len(members) <= 1:
+        try:
+            members = [m async for m in guild.fetch_members(limit=None)]
+        except Exception:
+            members = []
+            
+    for m in members:
+        if any(role.id in staff_role_ids for role in m.roles):
+            staff_names.append(m.name)
+            user_cache[m.id] = {"name": m.name, "avatar": m.display_avatar.url if m.display_avatar else None}
+            
+    return sorted(list(set(staff_names)))
+
 @app.get("/api/health")
 async def health_check():
     return {"status": "ok"}
@@ -123,8 +163,10 @@ async def get_warnings(
             
         resolved_warnings.append(w)
 
-    # Extract unique staff list from ALL warnings in this guild before filtering
-    all_staff_names = sorted(list(set(w['staff_name'] for w in resolved_warnings)))
+    # Extract unique staff list from guild staff roles and warnings logs
+    guild_staff = await get_guild_staff_names(guild_id)
+    log_staff = sorted(list(set(w['staff_name'] for w in resolved_warnings if w['staff_name'] != "System")))
+    all_staff_names = sorted(list(set(guild_staff + log_staff)))
 
     # Apply Filters
     filtered_warnings = resolved_warnings
@@ -278,48 +320,143 @@ async def get_warning_reasons(guild_id: int):
         return [dict(row) for row in rows]
 
 @app.get("/api/guilds/{guild_id}/paid-requests")
-async def get_paid_requests(guild_id: int, limit: int = 50, offset: int = 0):
+async def get_paid_requests(
+    request: Request,
+    guild_id: int,
+    page: int = 1,
+    limit: int = 10,
+    sort_key: str = "request_id",
+    sort_dir: str = "desc",
+    search: str = "",
+    status: str = "",
+    staff: str = ""
+):
     async with database.aiosqlite.connect(database.DB_NAME) as db:
         db.row_factory = database.aiosqlite.Row
         
         if guild_id == 0:
             cursor = await db.execute('''
-                SELECT request_id, user_id, budget, sfw_nsfw, payment_method, use_case, content, status, created_at 
+                SELECT request_id, user_id, budget, sfw_nsfw, payment_method, use_case, content, status, created_at, actioned_by 
                 FROM paid_requests
-                ORDER BY created_at DESC
-                LIMIT ? OFFSET ?
-            ''', (limit, offset))
-            rows = await cursor.fetchall()
-            requests = [dict(row) for row in rows]
-            
-            count_cursor = await db.execute('SELECT COUNT(*) FROM paid_requests')
-            total = (await count_cursor.fetchone())[0]
+            ''')
         else:
             cursor = await db.execute('''
-                SELECT request_id, user_id, budget, sfw_nsfw, payment_method, use_case, content, status, created_at 
+                SELECT request_id, user_id, budget, sfw_nsfw, payment_method, use_case, content, status, created_at, actioned_by 
                 FROM paid_requests
                 WHERE guild_id = ?
-                ORDER BY created_at DESC
-                LIMIT ? OFFSET ?
-            ''', (guild_id, limit, offset))
-            rows = await cursor.fetchall()
-            requests = [dict(row) for row in rows]
-            
-            count_cursor = await db.execute('SELECT COUNT(*) FROM paid_requests WHERE guild_id = ?', (guild_id,))
-            total = (await count_cursor.fetchone())[0]
+            ''', (guild_id,))
+        rows = await cursor.fetchall()
+        requests = [dict(row) for row in rows]
 
-    if bot_client:
-        for r in requests:
-            user_id = r.get('user_id')
-            user_data = await get_cached_user(user_id)
-            if user_data:
-                r['user_name'] = user_data['name']
-                r['user_avatar'] = user_data['avatar']
+    # Resolve all unique staff members' usernames
+    unique_staff_ids = list(set(r['actioned_by'] for r in requests if r.get('actioned_by')))
+    staff_name_map = {}
+    for sid in unique_staff_ids:
+        s_data = await get_cached_user(sid)
+        if s_data:
+            staff_name_map[sid] = s_data['name']
+        else:
+            staff_name_map[sid] = f"Unknown ({sid})"
+    staff_name_map[None] = "System"
+    staff_name_map[0] = "System"
+
+    # Quick local resolution for target users, and map staff names
+    resolved_requests = []
+    for r in requests:
+        # Fast local resolve for user name
+        uid = r['user_id']
+        u_cached = user_cache.get(uid)
+        if u_cached:
+            r['user_name'] = u_cached['name']
+            r['user_avatar'] = u_cached['avatar']
+        else:
+            u_obj = bot_client.get_user(uid) if bot_client else None
+            if u_obj:
+                r['user_name'] = str(u_obj)
+                r['user_avatar'] = u_obj.display_avatar.url
+                user_cache[uid] = {"name": str(u_obj), "avatar": u_obj.display_avatar.url}
             else:
-                r['user_name'] = f"Unknown ({user_id})" if user_id else "Unknown"
+                r['user_name'] = f"Unknown ({uid})"
                 r['user_avatar'] = None
 
-    return {"requests": requests, "total": total}
+        # Assign fully resolved staff name
+        r['staff_name'] = staff_name_map.get(r.get('actioned_by'), "System")
+            
+        resolved_requests.append(r)
+
+    # Extract unique staff list from guild staff roles and paid requests logs
+    guild_staff = await get_guild_staff_names(guild_id)
+    log_staff = sorted(list(set(r['staff_name'] for r in resolved_requests if r['staff_name'] != "System")))
+    all_staff_names = sorted(list(set(guild_staff + log_staff)))
+
+    # Apply Filters
+    filtered_requests = resolved_requests
+    
+    if status and status != "All":
+        filtered_requests = [r for r in filtered_requests if r['status'].lower() == status.lower()]
+        
+    if staff and staff != "All":
+        filtered_requests = [r for r in filtered_requests if r['staff_name'].lower() == staff.lower()]
+        
+    if search:
+        search_lower = search.lower().strip()
+        filtered_requests = [
+            r for r in filtered_requests 
+            if search_lower in r['user_name'].lower()
+            or search_lower in str(r['user_id'])
+            or search_lower in r['payment_method'].lower()
+            or search_lower in r['budget'].lower()
+            or search_lower in r['content'].lower()
+            or search_lower in f"#{r['request_id']}"
+            or search_lower in str(r['request_id'])
+        ]
+        
+    filtered_total = len(filtered_requests)
+
+    # Apply Sorting
+    if sort_key:
+        reverse = (sort_dir == "desc")
+        def get_sort_val(item):
+            val = item.get(sort_key)
+            if val is None:
+                return "" if isinstance(sort_key, str) else 0
+            return val
+        try:
+            filtered_requests.sort(key=get_sort_val, reverse=reverse)
+        except Exception:
+            filtered_requests.sort(key=lambda item: str(item.get(sort_key) or ""), reverse=reverse)
+
+    # Apply Pagination
+    start = (page - 1) * limit
+    end = start + limit
+    page_requests = filtered_requests[start:end]
+
+    # Full API fetch/resolution for only the paginated slice
+    for r in page_requests:
+        # Full resolve user (can make fetch_user request if not in memory)
+        user_data = await get_cached_user(r['user_id'])
+        if user_data:
+            r['user_name'] = user_data['name']
+            r['user_avatar'] = user_data['avatar']
+        else:
+            r['user_name'] = f"Unknown ({r['user_id']})"
+            r['user_avatar'] = None
+        
+        # Full resolve staff
+        aid = r.get('actioned_by')
+        if aid:
+            staff_data = await get_cached_user(aid)
+            if staff_data:
+                r['staff_name'] = staff_data['name']
+                r['staff_avatar'] = staff_data['avatar']
+            else:
+                r['staff_name'] = f"Unknown ({aid})"
+                r['staff_avatar'] = None
+        else:
+            r['staff_name'] = "System"
+            r['staff_avatar'] = None
+
+    return {"requests": page_requests, "total": filtered_total, "staff_list": all_staff_names}
 
 @app.get("/api/guilds/{guild_id}/stats")
 async def get_stats(guild_id: int):

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CreditCard, Search, RefreshCw, X, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Filter } from "lucide-react";
+import { CreditCard, Search, RefreshCw, X, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter } from "lucide-react";
 import { useGuild } from "../../../context/GuildContext";
 
 type PaidRequest = {
@@ -29,7 +29,10 @@ export default function RequestsPage() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [sortConfig, setSortConfig] = useState<{ key: keyof PaidRequest; direction: 'asc' | 'desc' }>({ key: 'request_id', direction: 'desc' });
   const [statusFilter, setStatusFilter] = useState<string>("All");
+  const [staffFilter, setStaffFilter] = useState<string>("All");
   const [totalCount, setTotalCount] = useState(0);
+  const [staffList, setStaffList] = useState<string[]>([]);
+  const [pageInput, setPageInput] = useState("1");
 
   const fetchRequests = () => {
     if (!selectedGuildId || selectedGuildId === "0") {
@@ -46,13 +49,15 @@ export default function RequestsPage() {
       sort_key: sortConfig.key,
       sort_dir: sortConfig.direction,
       search: searchQuery,
-      status: statusFilter === "All" ? "" : statusFilter
+      status: statusFilter === "All" ? "" : statusFilter,
+      staff: staffFilter === "All" ? "" : staffFilter
     });
     fetch(`${apiUrl}/api/guilds/${selectedGuildId}/paid-requests?${params}`)
       .then((res) => res.json())
       .then((data) => {
         setRequests(data.requests || []);
         setTotalCount(data.total || 0);
+        setStaffList(data.staff_list || []);
         setLoading(false);
       })
       .catch((err) => {
@@ -71,7 +76,11 @@ export default function RequestsPage() {
 
   useEffect(() => {
     fetchRequests();
-  }, [selectedGuildId, currentPage, itemsPerPage, sortConfig, searchQuery, statusFilter]);
+  }, [selectedGuildId, currentPage, itemsPerPage, sortConfig, searchQuery, statusFilter, staffFilter]);
+
+  useEffect(() => {
+    setPageInput(currentPage.toString());
+  }, [currentPage]);
 
   // Pagination boundaries
   const totalPages = Math.ceil(totalCount / itemsPerPage) || 1;
@@ -80,7 +89,7 @@ export default function RequestsPage() {
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, statusFilter, itemsPerPage]);
+  }, [searchQuery, statusFilter, staffFilter, itemsPerPage]);
 
   const handleSort = (key: keyof PaidRequest) => {
     setSortConfig(prev => ({
@@ -128,21 +137,37 @@ export default function RequestsPage() {
       </div>
 
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-surface-dark/50 p-3 rounded-lg border border-teal-900/30">
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Filter className="w-4 h-4 text-teal-500" />
-          <span className="text-sm text-gray-400">Status:</span>
-          <select 
-            value={statusFilter} 
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-surface-dark border border-teal-900/40 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-teal-500 w-full sm:w-auto min-w-[120px]"
-          >
-            <option value="All">All Requests</option>
-            <option value="Pending">Pending</option>
-            <option value="Approved">Approved</option>
-            <option value="Rejected">Rejected</option>
-            <option value="Closed">Closed</option>
-            <option value="Fulfilled">Fulfilled</option>
-          </select>
+        <div className="flex flex-wrap items-center gap-4 w-full sm:w-auto">
+          <div className="flex items-center gap-2">
+            <Filter className="w-4 h-4 text-teal-500" />
+            <span className="text-sm text-gray-400">Status:</span>
+            <select 
+              value={statusFilter} 
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="bg-surface-dark border border-teal-900/40 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-teal-500 min-w-[120px]"
+            >
+              <option value="All">All Requests</option>
+              <option value="Pending">Pending</option>
+              <option value="Approved">Approved</option>
+              <option value="Rejected">Rejected</option>
+              <option value="Closed">Closed</option>
+              <option value="Fulfilled">Fulfilled</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-400">Actioned By:</span>
+            <select 
+              value={staffFilter} 
+              onChange={(e) => setStaffFilter(e.target.value)}
+              className="bg-surface-dark border border-teal-900/40 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-teal-500 min-w-[120px]"
+            >
+              <option value="All">All Staff</option>
+              {staffList.map(staff => (
+                <option key={staff} value={staff}>{staff}</option>
+              ))}
+            </select>
+          </div>
         </div>
         
         <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -257,48 +282,102 @@ export default function RequestsPage() {
                   Showing <span className="text-white font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="text-white font-medium">{Math.min(currentPage * itemsPerPage, totalCount)}</span> of <span className="text-white font-medium">{totalCount}</span> entries
                 </div>
               
-              <div className="flex items-center gap-2">
-                <button 
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="p-1 rounded-md text-gray-400 hover:text-white hover:bg-teal-900/30 disabled:opacity-50 disabled:hover:bg-transparent transition-colors"
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                </button>
-                
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    let pageNum = currentPage;
-                    if (totalPages <= 5) pageNum = i + 1;
-                    else if (currentPage <= 3) pageNum = i + 1;
-                    else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + i;
-                    else pageNum = currentPage - 2 + i;
-                    
-                    if (pageNum < 1 || pageNum > totalPages) return null;
-                    
-                    return (
-                      <button
-                        key={pageNum}
-                        onClick={() => setCurrentPage(pageNum)}
-                        className={`w-8 h-8 rounded-md flex items-center justify-center transition-colors ${
-                          currentPage === pageNum 
-                            ? 'bg-teal-500 text-white font-medium shadow-md shadow-teal-900/20' 
-                            : 'text-gray-400 hover:text-white hover:bg-teal-900/30'
-                        }`}
-                      >
-                        {pageNum}
-                      </button>
-                    );
-                  })}
+              <div className="flex flex-wrap items-center gap-4">
+                {/* Type Page Number */}
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-400">Go to page:</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={totalPages}
+                    value={pageInput}
+                    onChange={(e) => setPageInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        const pageNum = parseInt(pageInput, 10);
+                        if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
+                          setCurrentPage(pageNum);
+                        } else {
+                          setPageInput(currentPage.toString());
+                        }
+                      }
+                    }}
+                    onBlur={() => {
+                      const pageNum = parseInt(pageInput, 10);
+                      if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
+                        setCurrentPage(pageNum);
+                      } else {
+                        setPageInput(currentPage.toString());
+                      }
+                    }}
+                    className="w-14 bg-surface-dark border border-teal-900/40 rounded px-2 py-1 text-center text-sm text-white focus:outline-none focus:border-teal-500/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                  <span className="text-gray-400">of {totalPages}</span>
                 </div>
-                
-                <button 
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                  className="p-1 rounded-md text-gray-400 hover:text-white hover:bg-teal-900/30 disabled:opacity-50 disabled:hover:bg-transparent transition-colors"
-                >
-                  <ChevronRight className="w-5 h-5" />
-                </button>
+
+                <div className="flex items-center gap-1.5">
+                  <button 
+                    onClick={() => setCurrentPage(1)}
+                    disabled={currentPage === 1}
+                    className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-teal-900/30 disabled:opacity-50 disabled:hover:bg-transparent transition-colors"
+                    title="First Page"
+                  >
+                    <ChevronsLeft className="w-4 h-4" />
+                  </button>
+
+                  <button 
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-teal-900/30 disabled:opacity-50 disabled:hover:bg-transparent transition-colors"
+                    title="Previous Page"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum = currentPage;
+                      if (totalPages <= 5) pageNum = i + 1;
+                      else if (currentPage <= 3) pageNum = i + 1;
+                      else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + i;
+                      else pageNum = currentPage - 2 + i;
+                      
+                      if (pageNum < 1 || pageNum > totalPages) return null;
+                      
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => setCurrentPage(pageNum)}
+                          className={`w-8 h-8 rounded-md flex items-center justify-center transition-colors ${
+                            currentPage === pageNum 
+                              ? 'bg-teal-500 text-white font-medium shadow-md shadow-teal-900/20' 
+                              : 'text-gray-400 hover:text-white hover:bg-teal-900/30'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  
+                  <button 
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-teal-900/30 disabled:opacity-50 disabled:hover:bg-transparent transition-colors"
+                    title="Next Page"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+
+                  <button 
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={currentPage === totalPages}
+                    className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-teal-900/30 disabled:opacity-50 disabled:hover:bg-transparent transition-colors"
+                    title="Last Page"
+                  >
+                    <ChevronsRight className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -326,71 +405,87 @@ export default function RequestsPage() {
                 ✕
               </button>
             </div>
-            
             {/* Modal Body */}
-            <div className="p-6 overflow-y-auto space-y-6 text-sm">
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-1">
-                  <div className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2">Original Author</div>
-                  <div className="flex items-center gap-3 bg-surface-darker p-3 rounded-lg border border-white/5">
-                    {selectedRequest.user_avatar ? (
-                      <img src={selectedRequest.user_avatar} alt="" className="w-10 h-10 rounded-full" />
-                    ) : (
-                      <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center font-bold">
-                        {selectedRequest.user_name.charAt(0).toUpperCase()}
+            <div className="overflow-y-auto flex-1 text-sm">
+              <div className="p-6 space-y-6">
+                
+                {/* Row 1: Author & Status/Timeline */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  
+                  {/* Left Column: Original Author */}
+                  <div className="space-y-1">
+                    <div className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2">Original Author</div>
+                    <div className="flex items-center gap-3 bg-surface-darker p-3.5 rounded-lg border border-white/5 min-h-[85px]">
+                      {selectedRequest.user_avatar ? (
+                        <img src={selectedRequest.user_avatar} alt="" className="w-10 h-10 rounded-full bg-gray-800" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center font-bold">
+                          {selectedRequest.user_name.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div>
+                        <div className="font-medium text-white">{selectedRequest.user_name}</div>
+                        <div className="text-gray-500 font-mono text-xs">{selectedRequest.user_id}</div>
                       </div>
-                    )}
-                    <div>
-                      <div className="font-medium text-white">{selectedRequest.user_name}</div>
-                      <div className="text-gray-500 font-mono text-xs">{selectedRequest.user_id}</div>
                     </div>
                   </div>
+
+                  {/* Right Column: Status & Timeline */}
+                  <div className="space-y-1">
+                    <div className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2">Status & Timeline</div>
+                    <div className="flex flex-col justify-center px-4 py-3 bg-surface-darker rounded-lg border border-white/5 min-h-[85px] gap-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className={`px-2.5 py-0.5 rounded text-xs font-semibold tracking-wide ${
+                          selectedRequest.status === 'pending' ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' : 
+                          selectedRequest.status === 'approved' || selectedRequest.status === 'fulfilled' ? 'bg-teal-500/10 text-teal-400 border border-teal-500/20' : 
+                          'bg-red-500/10 text-red-400 border border-red-500/20'
+                        }`}>
+                          {selectedRequest.status.toUpperCase()}
+                        </span>
+                        <span className="text-gray-500 text-[11px] font-mono">
+                          {new Date(selectedRequest.created_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                      
+                      <div className="flex flex-col text-[11px] text-gray-400 gap-0.5">
+                        <div>Submitted: <span className="text-gray-300 font-mono">{new Date(selectedRequest.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span></div>
+                        {selectedRequest.status !== 'pending' && selectedRequest.staff_name && (
+                          <div>Actioned by: <span className="text-gray-300 font-medium">{selectedRequest.staff_name}</span></div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
                 </div>
-                <div className="space-y-1">
-                  <div className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2">Status</div>
-                  <div className="flex items-center h-[66px] px-4 bg-surface-darker rounded-lg border border-white/5">
-                    <span className={`px-3 py-1 rounded-md text-sm font-medium ${
-                      selectedRequest.status === 'pending' ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' : 
-                      selectedRequest.status === 'approved' ? 'bg-teal-500/10 text-teal-400 border border-teal-500/20' : 
-                      'bg-red-500/10 text-red-400 border border-red-500/20'
-                    }`}>
-                      {selectedRequest.status.toUpperCase()}
-                    </span>
+
+                {/* Row 2: 4-Column Specs Grid */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-surface-darker p-4 rounded-lg border border-white/5 space-y-1">
+                    <div className="text-gray-500 text-xs uppercase tracking-wider font-medium">Budget</div>
+                    <div className="text-teal-300 font-mono text-base font-semibold">{selectedRequest.budget}</div>
+                  </div>
+                  <div className="bg-surface-darker p-4 rounded-lg border border-white/5 space-y-1">
+                    <div className="text-gray-500 text-xs uppercase tracking-wider font-medium">Payment Method</div>
+                    <div className="text-gray-200 text-sm font-medium">{selectedRequest.payment_method}</div>
+                  </div>
+                  <div className="bg-surface-darker p-4 rounded-lg border border-white/5 space-y-1">
+                    <div className="text-gray-500 text-xs uppercase tracking-wider font-medium">SFW / NSFW</div>
+                    <div className="text-gray-200 text-sm font-medium">{selectedRequest.sfw_nsfw}</div>
+                  </div>
+                  <div className="bg-surface-darker p-4 rounded-lg border border-white/5 space-y-1">
+                    <div className="text-gray-500 text-xs uppercase tracking-wider font-medium">Use Case</div>
+                    <div className="text-gray-200 text-sm font-medium">{selectedRequest.use_case}</div>
                   </div>
                 </div>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-surface-darker p-4 rounded-lg border border-white/5 space-y-1">
-                  <div className="text-gray-500 text-xs flex items-center gap-1.5">Budget</div>
-                  <div className="text-teal-300 font-mono text-sm">{selectedRequest.budget}</div>
-                </div>
-                <div className="bg-surface-darker p-4 rounded-lg border border-white/5 space-y-1">
-                  <div className="text-gray-500 text-xs flex items-center gap-1.5">Payment Method</div>
-                  <div className="text-gray-300">{selectedRequest.payment_method}</div>
-                </div>
-                <div className="bg-surface-darker p-4 rounded-lg border border-white/5 space-y-1">
-                  <div className="text-gray-500 text-xs flex items-center gap-1.5">Created At</div>
-                  <div className="text-gray-400">{new Date(selectedRequest.created_at).toLocaleString()}</div>
-                </div>
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-surface-darker p-4 rounded-lg border border-white/5 space-y-1">
-                  <div className="text-gray-500 text-xs flex items-center gap-1.5">SFW / NSFW</div>
-                  <div className="text-gray-300">{selectedRequest.sfw_nsfw}</div>
+                {/* Row 3: Request Content */}
+                <div className="space-y-2">
+                  <div className="text-gray-500 text-xs font-medium uppercase tracking-wider">Request Description</div>
+                  <div className="bg-surface-darker/60 p-4 rounded-xl border border-teal-900/30 text-gray-300 whitespace-pre-wrap leading-relaxed shadow-inner font-sans text-sm min-h-[140px] max-h-[250px] overflow-y-auto">
+                    {selectedRequest.content}
+                  </div>
                 </div>
-                <div className="bg-surface-darker p-4 rounded-lg border border-white/5 space-y-1">
-                  <div className="text-gray-500 text-xs flex items-center gap-1.5">Use Case</div>
-                  <div className="text-gray-300">{selectedRequest.use_case}</div>
-                </div>
-              </div>
 
-              <div>
-                <div className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2">Request Content</div>
-                <div className="bg-surface-darker p-4 rounded-lg border border-teal-900/40 text-gray-300 whitespace-pre-wrap leading-relaxed shadow-inner">
-                  {selectedRequest.content}
-                </div>
               </div>
             </div>
             

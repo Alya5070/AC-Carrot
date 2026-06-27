@@ -424,7 +424,7 @@ class PaidRequest(commands.Cog):
         if approved_channel:
             approved_msg = await approved_channel.send(content=f"DM the user here <@{req['user_id']}>", embed=embed)
             
-        await database.update_paid_request_status(req_id, 'approved', approved_msg.id if approved_msg else None)
+        await database.update_paid_request_status(req_id, 'approved', approved_msg.id if approved_msg else None, actioned_by=interaction.user.id)
 
         log_channel_id = config.get("approval_log_channel_id") or 0
         log_channel = self.bot.get_channel(log_channel_id)
@@ -514,7 +514,7 @@ class PaidRequest(commands.Cog):
             except (discord.NotFound, discord.HTTPException):
                 pass
 
-        await database.update_paid_request_status(req_id, action)
+        await database.update_paid_request_status(req_id, action, actioned_by=interaction.user.id)
         
         view = discord.ui.View(timeout=None)
         close_btn = discord.ui.Button(label="Close", style=discord.ButtonStyle.secondary, disabled=True)
@@ -556,7 +556,7 @@ class PaidRequest(commands.Cog):
             except discord.HTTPException:
                 pass
 
-        await database.update_paid_request_status(req_id, 'cancelled')
+        await database.update_paid_request_status(req_id, 'cancelled', actioned_by=interaction.user.id)
 
         view = discord.ui.View(timeout=None)
         edit_btn = discord.ui.Button(label="Edit", style=discord.ButtonStyle.secondary, disabled=True)

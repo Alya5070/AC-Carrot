@@ -9,7 +9,7 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "AC Carrot Dashboard",
-  description: "Modern, high-performance web dashboard for AC Carrot Discord Bot.",
+  description: "Web dashboard for Carrot",
 };
 
 export default function RootLayout({

@@ -119,6 +119,13 @@ async def init_db():
             await db.commit()
         except aiosqlite.OperationalError:
             pass # Column already exists
+
+        try:
+            await db.execute('ALTER TABLE paid_requests ADD COLUMN actioned_by INTEGER')
+            await db.commit()
+        except aiosqlite.OperationalError:
+            pass # Column already exists
+
         
         await db.execute('''
             CREATE TABLE IF NOT EXISTS reaction_roles (
@@ -499,10 +506,14 @@ async def update_paid_request_review_msg(request_id: int, msg_id: int):
         await db.execute('UPDATE paid_requests SET staff_review_msg_id = ? WHERE request_id = ?', (msg_id, request_id))
         await db.commit()
 
-async def update_paid_request_status(request_id: int, status: str, approved_msg_id: int = None):
+async def update_paid_request_status(request_id: int, status: str, approved_msg_id: int = None, actioned_by: int = None):
     async with aiosqlite.connect(DB_NAME) as db:
-        if approved_msg_id:
+        if approved_msg_id and actioned_by:
+            await db.execute('UPDATE paid_requests SET status = ?, approved_msg_id = ?, actioned_by = ? WHERE request_id = ?', (status, approved_msg_id, actioned_by, request_id))
+        elif approved_msg_id:
             await db.execute('UPDATE paid_requests SET status = ?, approved_msg_id = ? WHERE request_id = ?', (status, approved_msg_id, request_id))
+        elif actioned_by:
+            await db.execute('UPDATE paid_requests SET status = ?, actioned_by = ? WHERE request_id = ?', (status, actioned_by, request_id))
         else:
             await db.execute('UPDATE paid_requests SET status = ? WHERE request_id = ?', (status, request_id))
         await db.commit()

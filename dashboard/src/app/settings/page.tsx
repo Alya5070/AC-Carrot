@@ -37,6 +37,7 @@ type GuildInfo = {
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<"verbal" | "paid">("verbal");
+  const [verbalSubTab, setVerbalSubTab] = useState<"channels" | "reasons">("channels");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [config, setConfig] = useState<GuildConfig | null>(null);
@@ -205,7 +206,32 @@ export default function SettingsPage() {
           </div>
 
           {activeTab === 'verbal' && (
-            <div className="space-y-8">
+            <div className="flex border-b border-teal-900/20 pb-0.5 mb-6 gap-6">
+              <button
+                onClick={() => setVerbalSubTab("channels")}
+                className={`text-sm font-medium transition-all relative pb-3 -mb-[2px] ${
+                  verbalSubTab === "channels" 
+                    ? "text-teal-400 border-b-2 border-teal-400 font-semibold" 
+                    : "text-gray-400 hover:text-white"
+                }`}
+              >
+                Channels & Roles
+              </button>
+              <button
+                onClick={() => setVerbalSubTab("reasons")}
+                className={`text-sm font-medium transition-all relative pb-3 -mb-[2px] ${
+                  verbalSubTab === "reasons" 
+                    ? "text-teal-400 border-b-2 border-teal-400 font-semibold" 
+                    : "text-gray-400 hover:text-white"
+                }`}
+              >
+                Warning Reasons
+              </button>
+            </div>
+          )}
+
+          {activeTab === 'verbal' && verbalSubTab === 'channels' && (
+            <div className="space-y-8 animate-in fade-in duration-250">
               <div>
                 <h3 className="text-sm font-semibold text-teal-600/70 uppercase tracking-wider border-b border-teal-900/30 pb-2 mb-4">Channel & Roles Configuration</h3>
 
@@ -288,56 +314,6 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              <div>
-                <h3 className="text-sm font-semibold text-teal-600/70 uppercase tracking-wider border-b border-teal-900/30 pb-2 mb-4">Verbal Warning Reasons</h3>
-                <div className="space-y-4">
-                  {reasons.map((reason, idx) => {
-                    const isExpanded = expandedReasons.includes(idx);
-                    return (
-                      <div key={idx} className="bg-surface-dark/50 border border-teal-900/20 rounded-lg p-4 relative transition-all">
-                        <div className="flex justify-between items-center cursor-pointer" onClick={() => toggleReason(idx)}>
-                          <div className="flex items-center gap-4">
-                            <div>
-                              <div className="font-medium text-teal-400 text-sm">{reason.label || "Unnamed Reason"}</div>
-                              <div className="text-xs text-gray-500">ID: {reason.id || "No ID"}</div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <div className={`px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${isExpanded ? 'bg-teal-500/20 text-teal-400' : 'bg-surface-dark text-gray-400 hover:bg-surface-light'}`}>
-                              {isExpanded ? "CLOSE" : "EDIT"}
-                            </div>
-                            <button onClick={(e) => { e.stopPropagation(); removeReason(idx); }} className="text-red-400 hover:text-red-300 p-2 bg-red-900/10 hover:bg-red-900/20 rounded-md transition-colors" title="Delete Reason">
-                              <X className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-
-                        {isExpanded && (
-                          <div className="mt-5 pt-5 border-t border-teal-900/20 animate-in fade-in slide-in-from-top-2">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                              <div className="space-y-1">
-                                <label className="text-xs text-gray-400">Reason Key / ID</label>
-                                <input type="text" value={reason.id} onChange={e => handleReasonChange(idx, "id", e.target.value)} className="w-full bg-surface-dark border border-teal-900/40 rounded text-sm text-white px-2 py-1 focus:outline-none focus:border-teal-500/50" />
-                              </div>
-                              <div className="space-y-1">
-                                <label className="text-xs text-gray-400">Dropdown Label</label>
-                                <input type="text" value={reason.label} onChange={e => handleReasonChange(idx, "label", e.target.value)} className="w-full bg-surface-dark border border-teal-900/40 rounded text-sm text-white px-2 py-1 focus:outline-none focus:border-teal-500/50" />
-                              </div>
-                            </div>
-                            <div className="space-y-1">
-                              <label className="text-xs text-gray-400">DM Notice Embed Content (Markdown)</label>
-                              <textarea value={reason.text} onChange={e => handleReasonChange(idx, "text", e.target.value)} className="w-full bg-surface-dark border border-teal-900/40 rounded text-sm text-white px-3 py-2 min-h-[80px] focus:outline-none focus:border-teal-500/50" />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-                <button onClick={addReason} className="mt-4 text-teal-400 hover:text-teal-300 bg-teal-500/10 hover:bg-teal-500/20 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
-                  <Plus className="w-4 h-4" /> Add New Reason
-                </button>
-              </div>
               <div className="pt-8 border-t border-red-900/30">
                 <h3 className="text-sm font-semibold text-red-500/80 uppercase tracking-wider mb-4 flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4" /> Danger Zone
@@ -362,6 +338,128 @@ export default function SettingsPage() {
                   className="bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
                 >
                   Purge All Verbal Warnings
+                </button>
+              </div>
+
+            </div>
+          )}
+
+          {activeTab === 'verbal' && verbalSubTab === 'reasons' && (
+            <div className="space-y-8 animate-in fade-in duration-250">
+              <div>
+                <h3 className="text-sm font-semibold text-teal-600/70 uppercase tracking-wider border-b border-teal-900/30 pb-2 mb-5">Verbal Warning Reasons</h3>
+                <div className="space-y-4">
+                  {reasons.map((reason, idx) => {
+                    const isExpanded = expandedReasons.includes(idx);
+                    return (
+                      <div 
+                        key={idx} 
+                        className={`bg-surface-dark/40 border rounded-xl overflow-hidden transition-all duration-300 ${
+                          isExpanded 
+                            ? 'border-teal-500/35 shadow-lg shadow-teal-950/20 bg-surface-darker/60' 
+                            : 'border-white/5 hover:border-white/10 hover:bg-surface-dark/60'
+                        }`}
+                      >
+                        {/* Header Row */}
+                        <div 
+                          className="flex justify-between items-center px-5 py-4 cursor-pointer select-none" 
+                          onClick={() => toggleReason(idx)}
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className="flex flex-col">
+                              <span className="font-semibold text-gray-100 text-sm tracking-wide">
+                                {reason.label || <span className="text-gray-500 italic">Unnamed Reason</span>}
+                              </span>
+                              <span className="text-xs text-teal-500/70 font-mono mt-0.5">
+                                ID: {reason.id || "no_id_set"}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              className={`px-3 py-1.5 rounded-lg text-xs font-semibold tracking-wider transition-all duration-200 ${
+                                isExpanded 
+                                  ? 'bg-teal-500/20 text-teal-300 border border-teal-500/30' 
+                                  : 'bg-surface-darker text-gray-400 hover:text-white border border-white/5 hover:border-white/10'
+                              }`}
+                            >
+                              {isExpanded ? "CLOSE" : "EDIT"}
+                            </button>
+                            <button 
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); removeReason(idx); }} 
+                              className="text-red-400 hover:text-red-300 p-2 bg-red-500/5 hover:bg-red-500/15 border border-red-500/10 hover:border-red-500/20 rounded-lg transition-all duration-200" 
+                              title="Delete Reason"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Collapsible Content */}
+                        {isExpanded && (
+                          <div className="px-5 pb-5 pt-4 border-t border-white/5 bg-surface-darker/30 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div className="space-y-1.5">
+                                <label className="text-xs text-gray-400 font-medium tracking-wide uppercase">Reason Key / ID</label>
+                                <input 
+                                  type="text" 
+                                  value={reason.id} 
+                                  onChange={e => handleReasonChange(idx, "id", e.target.value)} 
+                                  placeholder="e.g. underpricing"
+                                  className="w-full bg-surface-dark border border-white/5 rounded-lg text-sm text-white px-3 py-2 focus:outline-none focus:border-teal-500/40 focus:ring-1 focus:ring-teal-500/40 transition-all font-mono" 
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <label className="text-xs text-gray-400 font-medium tracking-wide uppercase">Dropdown Label</label>
+                                <input 
+                                  type="text" 
+                                  value={reason.label} 
+                                  onChange={e => handleReasonChange(idx, "label", e.target.value)} 
+                                  placeholder="e.g. Underpricing"
+                                  className="w-full bg-surface-dark border border-white/5 rounded-lg text-sm text-white px-3 py-2 focus:outline-none focus:border-teal-500/40 focus:ring-1 focus:ring-teal-500/40 transition-all" 
+                                />
+                              </div>
+                            </div>
+
+                            <div className="space-y-2">
+                              <label className="text-xs text-gray-400 font-medium tracking-wide uppercase">DM Notice Embed Content (Markdown)</label>
+                              
+                              {/* Explanation Banner */}
+                              <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-3 text-xs text-amber-200/90 leading-relaxed space-y-1 flex gap-2.5 items-start">
+                                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                                <div>
+                                  <span className="font-semibold text-amber-300">Format Notice:</span> Do not start this field with <code className="bg-amber-950/40 px-1 py-0.5 rounded text-amber-400">"due to"</code> or <code className="bg-amber-950/40 px-1 py-0.5 rounded text-amber-400">"for"</code>. The bot automatically prefix-joins this text.
+                                  <div className="text-gray-400 mt-1">
+                                    Adding them causes redundant phrasing like: <em>"You have received a verbal warning for: <strong>due to</strong> underpricing."</em>
+                                  </div>
+                                  <div className="text-teal-400/90 mt-1.5">
+                                    💡 <strong>Recommended Start:</strong> Write <code className="bg-teal-950/40 px-1 py-0.5 rounded text-teal-300 font-mono">"pricing below minimum..."</code> instead.
+                                  </div>
+                                </div>
+                              </div>
+
+                              <textarea 
+                                value={reason.text} 
+                                onChange={e => handleReasonChange(idx, "text", e.target.value)} 
+                                placeholder="Details sent to the user when warned..."
+                                className="w-full bg-surface-dark border border-white/5 rounded-lg text-sm text-white px-3 py-2 min-h-[110px] focus:outline-none focus:border-teal-500/40 focus:ring-1 focus:ring-teal-500/40 transition-all font-sans leading-relaxed" 
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+                
+                <button 
+                  onClick={addReason} 
+                  className="mt-4 text-teal-400 hover:text-teal-300 bg-teal-500/5 hover:bg-teal-500/10 border border-teal-500/10 hover:border-teal-500/25 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" /> Add New Reason
                 </button>
               </div>
 

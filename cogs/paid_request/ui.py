@@ -328,7 +328,7 @@ class RejectReasonModal(discord.ui.Modal, title="Reason for Rejection"):
 
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
-        await database.update_paid_request_status(self.request_id, 'rejected')
+        await database.update_paid_request_status(self.request_id, 'rejected', actioned_by=interaction.user.id)
         
         req = await database.get_paid_request(self.request_id)
         reason_val = sanitize_input(self.reason.value, 500)
