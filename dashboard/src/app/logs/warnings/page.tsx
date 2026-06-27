@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import { sendLogToChannel } from "../../../lib/api";
 import { ShieldAlert, Search, Trash2, RefreshCw, Clock, MessageSquare, ExternalLink, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Filter } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { useGuild } from "../../../context/GuildContext";
