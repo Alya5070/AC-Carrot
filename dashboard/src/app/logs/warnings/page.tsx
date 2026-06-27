@@ -102,6 +102,11 @@ export default function WarningsPage() {
 
   const handleRevokeWarning = async () => {
     if (!selectedWarning) return;
+    
+    if (!window.confirm("Are you sure you want to completely revoke and delete this warning? This action cannot be undone.")) {
+      return;
+    }
+
     try {
       const res = await fetch(`${apiUrl}/api/guilds/${selectedGuildId}/warnings/${selectedWarning.id}`, {
         method: "DELETE"

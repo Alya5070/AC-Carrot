@@ -135,17 +135,31 @@ async def get_paid_requests(guild_id: int, limit: int = 50, offset: int = 0):
     async with database.aiosqlite.connect(database.DB_NAME) as db:
         db.row_factory = database.aiosqlite.Row
         
-        cursor = await db.execute('''
-            SELECT request_id, user_id, budget, sfw_nsfw, payment_method, use_case, content, status, created_at 
-            FROM paid_requests
-            ORDER BY created_at DESC
-            LIMIT ? OFFSET ?
-        ''', (limit, offset))
-        rows = await cursor.fetchall()
-        requests = [dict(row) for row in rows]
-        
-        count_cursor = await db.execute('SELECT COUNT(*) FROM paid_requests')
-        total = (await count_cursor.fetchone())[0]
+        if guild_id == 0:
+            cursor = await db.execute('''
+                SELECT request_id, user_id, budget, sfw_nsfw, payment_method, use_case, content, status, created_at 
+                FROM paid_requests
+                ORDER BY created_at DESC
+                LIMIT ? OFFSET ?
+            ''', (limit, offset))
+            rows = await cursor.fetchall()
+            requests = [dict(row) for row in rows]
+            
+            count_cursor = await db.execute('SELECT COUNT(*) FROM paid_requests')
+            total = (await count_cursor.fetchone())[0]
+        else:
+            cursor = await db.execute('''
+                SELECT request_id, user_id, budget, sfw_nsfw, payment_method, use_case, content, status, created_at 
+                FROM paid_requests
+                WHERE guild_id = ?
+                ORDER BY created_at DESC
+                LIMIT ? OFFSET ?
+            ''', (guild_id, limit, offset))
+            rows = await cursor.fetchall()
+            requests = [dict(row) for row in rows]
+            
+            count_cursor = await db.execute('SELECT COUNT(*) FROM paid_requests WHERE guild_id = ?', (guild_id,))
+            total = (await count_cursor.fetchone())[0]
 
     if bot_client:
         for r in requests:
