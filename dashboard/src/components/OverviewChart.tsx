@@ -11,7 +11,7 @@ export function OverviewChart() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!selectedGuildId || selectedGuildId === "0") return;
+    if (!selectedGuildId) return; // allow "0" for global analytics
     
     setLoading(true);
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";

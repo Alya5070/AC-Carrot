@@ -19,6 +19,7 @@ type Warning = {
   staff_avatar: string | null;
   reason: string | null;
   post_created_at: string | null;
+  attachments?: string[]; // optional array of attachment URLs
 };
 
 export default function WarningsPage() {
@@ -33,15 +34,25 @@ export default function WarningsPage() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [sortConfig, setSortConfig] = useState<{ key: keyof Warning; direction: 'asc' | 'desc' }>({ key: 'id', direction: 'desc' });
   const [staffFilter, setStaffFilter] = useState<string>("All");
+  const [totalCount, setTotalCount] = useState(0);
 
   const fetchWarnings = () => {
     if (!selectedGuildId || selectedGuildId === "0") return;
     setLoading(true);
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-    fetch(`${apiUrl}/api/guilds/${selectedGuildId}/warnings`)
+    const params = new URLSearchParams({
+      page: currentPage.toString(),
+      limit: itemsPerPage.toString(),
+      sort_key: sortConfig.key,
+      sort_dir: sortConfig.direction,
+      search: searchQuery,
+      staff: staffFilter === "All" ? "" : staffFilter
+    });
+    fetch(`${apiUrl}/api/guilds/${selectedGuildId}/warnings?${params}`)
       .then((res) => res.json())
       .then((data) => {
         setWarnings(data.warnings || []);
+        setTotalCount(data.total || 0);
         setLoading(false);
       })
       .catch((err) => {
@@ -51,46 +62,16 @@ export default function WarningsPage() {
   };
 
   useEffect(() => {
-    if (selectedGuildId && selectedGuildId !== "0") {
+    if (selectedGuildId) {
       fetchWarnings();
     }
-  }, [selectedGuildId]);
+  }, [selectedGuildId, currentPage, itemsPerPage, sortConfig, searchQuery, staffFilter]);
 
-  const processedWarnings = useMemo(() => {
-    // 1. Filter
-    let filtered = warnings.filter((w) => {
-      const query = searchQuery.toLowerCase();
-      const matchesSearch = (w.user_name || "").toLowerCase().includes(query) ||
-        (w.user_id || "").toString().includes(query) ||
-        (w.reason || "").toLowerCase().includes(query) ||
-        (w.staff_name || "").toLowerCase().includes(query);
-      
-      const matchesStaff = staffFilter === "All" || w.staff_name === staffFilter;
-      return matchesSearch && matchesStaff;
-    });
-
-    // 2. Sort
-    filtered.sort((a, b) => {
-      let aValue = a[sortConfig.key];
-      let bValue = b[sortConfig.key];
-      
-      if (aValue === null) aValue = "";
-      if (bValue === null) bValue = "";
-      
-      if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
-      if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
-      return 0;
-    });
-
-    return filtered;
-  }, [warnings, searchQuery, staffFilter, sortConfig]);
+  const processedWarnings = warnings;
 
   // Pagination boundaries
-  const totalPages = Math.ceil(processedWarnings.length / itemsPerPage) || 1;
-  const currentWarnings = processedWarnings.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  const totalPages = Math.ceil(totalCount / itemsPerPage) || 1;
+  const currentWarnings = processedWarnings;
 
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -266,10 +247,10 @@ export default function WarningsPage() {
             </tbody>
           </table>
           
-          {!loading && processedWarnings.length > 0 && (
+          { !loading && totalCount > 0 && (
             <div className="px-6 py-4 border-t border-teal-900/30 bg-surface-dark/40 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm">
               <div className="text-gray-400">
-                Showing <span className="text-white font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="text-white font-medium">{Math.min(currentPage * itemsPerPage, processedWarnings.length)}</span> of <span className="text-white font-medium">{processedWarnings.length}</span> entries
+                Showing <span className="text-white font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="text-white font-medium">{Math.min(currentPage * itemsPerPage, totalCount)}</span> of <span className="text-white font-medium">{totalCount}</span> entries
               </div>
               
               <div className="flex items-center gap-2">
@@ -412,6 +393,24 @@ export default function WarningsPage() {
                   {selectedWarning.message_content || "No original content available."}
                 </div>
               </div>
+
+              {/* Attachments */}
+              {selectedWarning.attachments && selectedWarning.attachments.length > 0 && (
+                <div className="mt-4">
+                  <div className="text-gray-500 text-xs font-medium uppercase tracking-wider mb-2">Attachments</div>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {selectedWarning.attachments.map((url, idx) => (
+                      url.match(/\.(jpeg|jpg|png|gif|webp)$/i) ? (
+                        <img key={idx} src={url} alt={`attachment-${idx}`} className="max-w-full h-auto rounded-md object-cover" />
+                      ) : (
+                        <a key={idx} href={url} target="_blank" rel="noreferrer" className="text-teal-400 hover:text-teal-300 break-all">
+                          Download File
+                        </a>
+                      )
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Modal Footer */}

@@ -24,21 +24,30 @@ export default function RequestsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRequest, setSelectedRequest] = useState<PaidRequest | null>(null);
   const { selectedGuildId } = useGuild();
-
-  // Pagination & Sorting State
+  // Pagination & sorting
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [sortConfig, setSortConfig] = useState<{ key: keyof PaidRequest; direction: 'asc' | 'desc' }>({ key: 'request_id', direction: 'desc' });
   const [statusFilter, setStatusFilter] = useState<string>("All");
+  const [totalCount, setTotalCount] = useState(0);
 
   const fetchRequests = () => {
     if (!selectedGuildId || selectedGuildId === "0") return;
     setLoading(true);
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-    fetch(`${apiUrl}/api/guilds/${selectedGuildId}/paid-requests`)
+    const params = new URLSearchParams({
+      page: currentPage.toString(),
+      limit: itemsPerPage.toString(),
+      sort_key: sortConfig.key,
+      sort_dir: sortConfig.direction,
+      search: searchQuery,
+      status: statusFilter === "All" ? "" : statusFilter
+    });
+    fetch(`${apiUrl}/api/guilds/${selectedGuildId}/paid-requests?${params}`)
       .then((res) => res.json())
       .then((data) => {
         setRequests(data.requests || []);
+        setTotalCount(data.total || 0);
         setLoading(false);
       })
       .catch((err) => {
@@ -51,7 +60,7 @@ export default function RequestsPage() {
     if (selectedGuildId && selectedGuildId !== "0") {
       fetchRequests();
     }
-  }, [selectedGuildId]);
+  }, [selectedGuildId, currentPage, itemsPerPage, sortConfig, searchQuery, statusFilter]);
 
   const processedRequests = useMemo(() => {
     // 1. Filter
@@ -83,11 +92,8 @@ export default function RequestsPage() {
   }, [requests, searchQuery, statusFilter, sortConfig]);
 
   // Pagination boundaries
-  const totalPages = Math.ceil(processedRequests.length / itemsPerPage) || 1;
-  const currentRequests = processedRequests.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  const totalPages = Math.ceil(totalCount / itemsPerPage) || 1;
+  const currentRequests = requests; // already paginated from backend
 
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -152,6 +158,8 @@ export default function RequestsPage() {
             <option value="Pending">Pending</option>
             <option value="Approved">Approved</option>
             <option value="Rejected">Rejected</option>
+            <option value="Closed">Closed</option>
+            <option value="Fulfilled">Fulfilled</option>
           </select>
         </div>
         
@@ -261,11 +269,11 @@ export default function RequestsPage() {
             </tbody>
           </table>
           
-          {!loading && processedRequests.length > 0 && (
+          {!loading && totalCount > 0 && (
             <div className="px-6 py-4 border-t border-teal-900/30 bg-surface-dark/40 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm">
-              <div className="text-gray-400">
-                Showing <span className="text-white font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="text-white font-medium">{Math.min(currentPage * itemsPerPage, processedRequests.length)}</span> of <span className="text-white font-medium">{processedRequests.length}</span> entries
-              </div>
+                <div className="text-gray-400">
+                  Showing <span className="text-white font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="text-white font-medium">{Math.min(currentPage * itemsPerPage, totalCount)}</span> of <span className="text-white font-medium">{totalCount}</span> entries
+                </div>
               
               <div className="flex items-center gap-2">
                 <button 
