@@ -419,10 +419,13 @@ async def save_warning_reasons(guild_id: int, data: VerbalReasonsUpdate):
         await db.commit()
     return {"status": "success"}
 
-@app.post("/api/paid-requests/purge")
-async def purge_paid_requests():
+@app.post("/api/guilds/{guild_id}/paid-requests/purge")
+async def purge_paid_requests(guild_id: int):
     async with database.aiosqlite.connect(database.DB_NAME) as db:
-        await db.execute("DELETE FROM paid_requests")
+        if guild_id == 0:
+            await db.execute("DELETE FROM paid_requests")
+        else:
+            await db.execute("DELETE FROM paid_requests WHERE guild_id = ?", (guild_id,))
         await db.commit()
     return {"status": "success"}
 
