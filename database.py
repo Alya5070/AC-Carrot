@@ -402,15 +402,12 @@ async def get_last_warning_staff_id_last_3_months(user_id: int):
 
 async def get_warnings_last_3_months(user_id: int):
     async with aiosqlite.connect(DB_NAME) as db:
-        db.row_factory = aiosqlite.Row
-        # Fetch all warnings within 3 months
         cursor = await db.execute('''
-            SELECT id, message_content, warned_at FROM warnings
+            SELECT id, reason, warned_at FROM warnings
             WHERE user_id = ? AND warned_at >= datetime('now', '-3 months')
             ORDER BY warned_at DESC
         ''', (user_id,))
-        rows = await cursor.fetchall()
-        return [(row['id'], row['message_content'], row['warned_at']) for row in rows if row['message_content']]
+        return await cursor.fetchall()
 
 async def get_warnings_paginated(user_id: int, limit: int, offset: int):
     async with aiosqlite.connect(DB_NAME) as db:
