@@ -106,6 +106,7 @@ async def init_db():
         await db.execute('UPDATE paid_requests SET guild_id = 369798142289510401 WHERE guild_id = 1437362160211726452 OR guild_id IS NULL')
         await db.commit()
 
+
         
         await db.execute('''
             CREATE TABLE IF NOT EXISTS reaction_roles (
@@ -329,6 +330,11 @@ async def add_warning(user_id: int, channel_id: int, message_id: int, message_co
             ''', (user_id, channel_id, message_id, message_content, staff_id, reason, post_created_at, guild_id))
         await db.commit()
         return cursor.lastrowid
+
+async def revoke_warning(warning_id: int):
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute('DELETE FROM warnings WHERE id = ?', (warning_id,))
+        await db.commit()
 
 async def warning_exists(message_id: int, user_id: int) -> bool:
     async with aiosqlite.connect(DB_NAME) as db:

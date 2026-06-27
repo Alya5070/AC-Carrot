@@ -99,6 +99,23 @@ export default function WarningsPage() {
     }));
   };
 
+  const handleRevokeWarning = async () => {
+    if (!selectedWarning) return;
+    try {
+      const res = await fetch(`${apiUrl}/api/guilds/${selectedGuildId}/warnings/${selectedWarning.id}`, {
+        method: "DELETE"
+      });
+      if (res.ok) {
+        setSelectedWarning(null);
+        fetchWarnings();
+      } else {
+        console.error("Failed to revoke warning");
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const SortIcon = ({ columnKey }: { columnKey: keyof Warning }) => {
     if (sortConfig.key !== columnKey) return <div className="w-4 h-4 opacity-0 group-hover:opacity-30 transition-opacity"><ChevronDown className="w-4 h-4" /></div>;
     return sortConfig.direction === 'asc' ? <ChevronUp className="w-4 h-4 text-teal-400" /> : <ChevronDown className="w-4 h-4 text-teal-400" />;
@@ -435,6 +452,7 @@ export default function WarningsPage() {
                 Close
               </button>
               <button 
+                onClick={handleRevokeWarning}
                 className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm font-medium rounded-lg flex items-center gap-2 border border-red-500/20 transition-colors"
               >
                 <Trash2 className="w-4 h-4" /> Revoke Warning

@@ -422,6 +422,12 @@ async def purge_warnings(guild_id: int):
         await db.commit()
     return {"status": "success"}
 
+@app.delete("/api/guilds/{guild_id}/warnings/{warning_id}")
+async def delete_warning(guild_id: int, warning_id: int):
+    # Pass guild_id if we want to secure it, but for now just revoke_warning
+    await database.revoke_warning(warning_id)
+    return {"status": "success"}
+
 @app.get("/api/guilds/{guild_id}/reminders")
 async def get_reminders(guild_id: int):
     async with database.aiosqlite.connect(database.DB_NAME) as db:
