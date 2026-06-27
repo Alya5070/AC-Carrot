@@ -90,7 +90,19 @@ async def get_warnings(
         rows = await cursor.fetchall()
         warnings = [dict(row) for row in rows]
 
-    # Quick local resolution for filtering and staff list (no slow network calls)
+    # Resolve all unique staff members' usernames (small list, safe to fetch/resolve fully)
+    unique_staff_ids = list(set(w['staff_id'] for w in warnings if w['staff_id']))
+    staff_name_map = {}
+    for sid in unique_staff_ids:
+        s_data = await get_cached_user(sid)
+        if s_data:
+            staff_name_map[sid] = s_data['name']
+        else:
+            staff_name_map[sid] = f"Unknown ({sid})"
+    staff_name_map[None] = "System"
+    staff_name_map[0] = "System"
+
+    # Quick local resolution for target users, and map staff names
     resolved_warnings = []
     for w in warnings:
         # Fast local resolve for user name
@@ -106,21 +118,8 @@ async def get_warnings(
             else:
                 w['user_name'] = f"Unknown ({uid})"
 
-        # Fast local resolve for staff name
-        sid = w['staff_id']
-        if sid:
-            s_cached = user_cache.get(sid)
-            if s_cached:
-                w['staff_name'] = s_cached['name']
-            else:
-                s_obj = bot_client.get_user(sid) if bot_client else None
-                if s_obj:
-                    w['staff_name'] = str(s_obj)
-                    user_cache[sid] = {"name": str(s_obj), "avatar": s_obj.display_avatar.url}
-                else:
-                    w['staff_name'] = f"Unknown ({sid})"
-        else:
-            w['staff_name'] = "System"
+        # Assign fully resolved staff name
+        w['staff_name'] = staff_name_map.get(w['staff_id'], "System")
             
         resolved_warnings.append(w)
 
