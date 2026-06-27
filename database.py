@@ -101,7 +101,11 @@ async def init_db():
         except aiosqlite.OperationalError:
             pass # Column already exists
 
-
+        try:
+            await db.execute('ALTER TABLE guild_configs ADD COLUMN dm_on_warning INTEGER DEFAULT 1')
+            await db.commit()
+        except aiosqlite.OperationalError:
+            pass # Column already exists
         
         await db.execute('''
             CREATE TABLE IF NOT EXISTS reaction_roles (
@@ -175,7 +179,8 @@ async def init_db():
                 reminder_threshold INTEGER DEFAULT 14,
                 accepted_currencies TEXT DEFAULT 'USD, EUR, GBP, CAD, AUD, \\$|£|€',
                 accepted_payments TEXT DEFAULT 'PayPal, Stripe, CashApp, Venmo, Ko-Fi',
-                banned_terms_regex TEXT DEFAULT 'robux|robuck|robucks|crypto|btc|eth|sol|ltc|usdt|usdc'
+                banned_terms_regex TEXT DEFAULT 'robux|robuck|robucks|crypto|btc|eth|sol|ltc|usdt|usdc',
+                dm_on_warning INTEGER DEFAULT 1
             )
         ''')
         
@@ -275,7 +280,8 @@ async def get_guild_config(guild_id: int):
             "reminder_threshold": 14,
             "accepted_currencies": "USD, EUR, GBP, CAD, AUD, \\$|£|€",
             "accepted_payments": "PayPal, Stripe, CashApp, Venmo, Ko-Fi",
-            "banned_terms_regex": "robux|robuck|robucks|crypto|btc|eth|sol|ltc|usdt|usdc"
+            "banned_terms_regex": "robux|robuck|robucks|crypto|btc|eth|sol|ltc|usdt|usdc",
+            "dm_on_warning": 1
         }
 
 async def migrate_env_to_db(guild_id: int):

@@ -237,12 +237,13 @@ class WarningTracker(commands.Cog):
                 timestamp_str = datetime.now(timezone.utc).strftime("%d/%m/%Y")
                 embed = discord.Embed(color=discord.Color.red())
                 guild = message.guild
+                guild_name = guild.name if guild else "this server"
                 icon_url = guild.icon.url if guild and guild.icon else self.bot.user.display_avatar.url
-                embed.set_author(name=f"Art Commission | {timestamp_str}", icon_url=icon_url)
+                embed.set_author(name=f"{guild_name} | {timestamp_str}", icon_url=icon_url)
                 
                 ordinal_num = get_ordinal(count)
                 desc = f"## This is your {ordinal_num} verbal warning\n\n"
-                desc += "You have received a __verbal warning__ in Art Commission server for:\n"
+                desc += f"You have received a __verbal warning__ in {guild_name} server for:\n"
                 
                 context_reason = reason
                 if len(context_reason) > 1200:
@@ -272,7 +273,9 @@ class WarningTracker(commands.Cog):
                 embed.description = desc
                 embed.set_footer(text="Verbal warnings expire every 3 months.")
                 
-                await message.author.send(embed=embed)
+                guild_config = await database.get_guild_config(guild.id if guild else 0)
+                if guild_config.get("dm_on_warning", 1):
+                    await message.author.send(embed=embed)
             except Exception as e:
                 print(f"Could not DM user {message.author.id}: {e}")
 
@@ -397,12 +400,13 @@ class WarningTracker(commands.Cog):
                 
                 embed = discord.Embed(color=discord.Color.red())
                 guild = message.guild
+                guild_name = guild.name if guild else "this server"
                 icon_url = guild.icon.url if guild and guild.icon else self.bot.user.display_avatar.url
-                embed.set_author(name=f"Art Commissions | {timestamp_str}", icon_url=icon_url)
+                embed.set_author(name=f"{guild_name} | {timestamp_str}", icon_url=icon_url)
                 
                 ordinal_num = get_ordinal(count)
                 desc = f"### your {ordinal_num} verbal warning\n\n"
-                desc += "You have received a __verbal warning__ in Art Commissions server for:\n\n"
+                desc += f"You have received a __verbal warning__ in {guild_name} server for:\n\n"
                 
                 context_reason = message.content
                 if len(context_reason) > 1200:
@@ -431,7 +435,9 @@ class WarningTracker(commands.Cog):
                 embed.description = desc
                 embed.set_footer(text="Keep in mind that verbal warnings reset every 3 months.")
                 
-                await user.send(embed=embed)
+                guild_config = await database.get_guild_config(guild.id if guild else 0)
+                if guild_config.get("dm_on_warning", 1):
+                    await user.send(embed=embed)
             except Exception as e:
                 print(f"Could not DM user {user.id}: {e}")
             

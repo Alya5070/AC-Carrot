@@ -237,6 +237,8 @@ class GuildConfig(BaseModel):
     accepted_currencies: str = "USD, EUR, GBP, CAD, AUD, \\$|£|€"
     accepted_payments: str = "PayPal, Stripe, CashApp, Venmo, Ko-Fi"
     banned_terms_regex: str = "robux|robuck|robucks|crypto|btc|eth|sol|ltc|usdt|usdc"
+    dm_on_warning: bool = True
+
 
 @app.get("/api/guilds/{guild_id}/analytics")
 async def get_analytics(guild_id: int, period: str = "month"):
@@ -370,13 +372,15 @@ async def save_config(guild_id: int, config: GuildConfig):
                     staff_notice_channel_id = ?, staff_commands_channel_id = ?, staff_log_channel_id = ?,
                     team_leader_role_id = ?, moderator_role_id = ?, trial_moderator_role_id = ?,
                     submit_channel_id = ?, review_channel_id = ?, approved_channel_id = ?, approval_log_channel_id = ?,
-                    active_limit = ?, reminder_threshold = ?, accepted_currencies = ?, accepted_payments = ?, banned_terms_regex = ?
+                    active_limit = ?, reminder_threshold = ?, accepted_currencies = ?, accepted_payments = ?, banned_terms_regex = ?,
+                    dm_on_warning = ?
                 WHERE guild_id = ?
             ''', (
                 config.staff_notice_channel_id, config.staff_commands_channel_id, config.staff_log_channel_id,
                 config.team_leader_role_id, config.moderator_role_id, config.trial_moderator_role_id,
                 config.submit_channel_id, config.review_channel_id, config.approved_channel_id, config.approval_log_channel_id,
                 config.active_limit, config.reminder_threshold, config.accepted_currencies, config.accepted_payments, config.banned_terms_regex,
+                int(config.dm_on_warning),
                 actual_guild_id
             ))
         else:
@@ -385,13 +389,15 @@ async def save_config(guild_id: int, config: GuildConfig):
                     guild_id, staff_notice_channel_id, staff_commands_channel_id, staff_log_channel_id,
                     team_leader_role_id, moderator_role_id, trial_moderator_role_id,
                     submit_channel_id, review_channel_id, approved_channel_id, approval_log_channel_id,
-                    active_limit, reminder_threshold, accepted_currencies, accepted_payments, banned_terms_regex
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    active_limit, reminder_threshold, accepted_currencies, accepted_payments, banned_terms_regex,
+                    dm_on_warning
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 actual_guild_id, config.staff_notice_channel_id, config.staff_commands_channel_id, config.staff_log_channel_id,
                 config.team_leader_role_id, config.moderator_role_id, config.trial_moderator_role_id,
                 config.submit_channel_id, config.review_channel_id, config.approved_channel_id, config.approval_log_channel_id,
-                config.active_limit, config.reminder_threshold, config.accepted_currencies, config.accepted_payments, config.banned_terms_regex
+                config.active_limit, config.reminder_threshold, config.accepted_currencies, config.accepted_payments, config.banned_terms_regex,
+                int(config.dm_on_warning)
             ))
         await db.commit()
     return {"status": "success"}

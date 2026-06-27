@@ -20,6 +20,7 @@ type GuildConfig = {
   accepted_currencies: string;
   accepted_payments: string;
   banned_terms_regex: string;
+  dm_on_warning: boolean;
 };
 
 type VerbalReason = {
@@ -263,6 +264,26 @@ export default function SettingsPage() {
                       <div className="group relative flex items-center"><HelpCircle className="w-3.5 h-3.5 text-gray-500 cursor-help" /><div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block w-64 p-2 bg-gray-800 border border-teal-900/50 text-xs text-gray-200 rounded shadow-xl z-50 text-center pointer-events-none whitespace-normal normal-case">Role ID for Trial Moderators (can issue warnings and review requests).</div></div>
                     </label>
                     <input type="text" value={config.trial_moderator_role_id || ""} onChange={e => handleIdChange("trial_moderator_role_id", e.target.value)} className="w-full bg-surface-dark border border-teal-900/40 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500/50" />
+                  </div>
+                  
+                  <div className="md:col-span-2 mt-4 border-t border-teal-900/20 pt-4 flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <label className="text-sm font-medium text-white">
+                        DM Users on Verbal Warning
+                      </label>
+                      <p className="text-xs text-gray-400">
+                        When enabled, the bot will automatically direct message (DM) warned users with warning details.
+                      </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={config.dm_on_warning ?? true}
+                        onChange={e => handleConfigChange("dm_on_warning", e.target.checked)}
+                        className="sr-only peer" 
+                      />
+                      <div className="w-11 h-6 bg-surface-dark peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-gray-400 after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-500 peer-checked:after:bg-white border border-teal-900/40"></div>
+                    </label>
                   </div>
                 </div>
               </div>
