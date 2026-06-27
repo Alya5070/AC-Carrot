@@ -216,22 +216,24 @@ class WarningTracker(commands.Cog):
             if len(content_snippet) > 800:
                 content_snippet = content_snippet[:800] + "..."
             
-            log_embed.add_field(
-                name="Original Post Content",
-                value=f"```\n{content_snippet}\n```",
-                inline=False
-            )
-            
             dashboard_url = os.getenv("DASHBOARD_URL", "http://localhost:3000")
             log_link = f"[log](https://{dashboard_url}/guilds/{message.guild.id if message.guild else 0}/logs/warnings/{warn_id})"
 
             if all_attachments:
+                # Add Original Post Content (without link)
+                log_embed.add_field(
+                    name="Original Post Content",
+                    value=f"```\n{content_snippet}\n```",
+                    inline=False
+                )
+                # Add Attachments (with link)
                 attachments_list = "\n".join([a.url for a in all_attachments])
                 if len(attachments_list) > 950:
                     attachments_list = attachments_list[:950] + "..."
                 attachments_list += f"\n\n{log_link}"
                 log_embed.add_field(name="Attachments", value=attachments_list, inline=False)
             else:
+                # Add Original Post Content (with link)
                 log_embed.add_field(
                     name="Original Post Content",
                     value=f"```\n{content_snippet}\n```\n{log_link}",
