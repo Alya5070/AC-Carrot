@@ -282,13 +282,6 @@ class WarningTracker(commands.Cog):
                         quoted_lines.append(f"> {line}")
                 desc += "\n".join(quoted_lines) + "\n"
                 
-                # Append original content removed
-                desc += "\n**Original Content:**\n"
-                content_display = original_content or "*No text content*"
-                if len(content_display) > 500:
-                    content_display = content_display[:497] + "..."
-                desc += f"```\n{content_display}\n```\n"
-                
                 if is_repeat:
                     desc += "\n⚠️ **Note:** You have received a verbal notice for the same offense in the last 3 months. Repeated offenses may lead to stricter actions.\n"
                 elif count == 2:
@@ -303,6 +296,10 @@ class WarningTracker(commands.Cog):
                 
                 guild_config = await database.get_guild_config(guild.id if guild else 0)
                 if guild_config.get("dm_on_warning", 1):
+                    # Send warning embed first
+                    await message.author.send(embed=embed)
+                    
+                    # Prepare files
                     files = []
                     for att in saved_attachments:
                         try:
@@ -312,10 +309,21 @@ class WarningTracker(commands.Cog):
                         except Exception as fe:
                             print(f"Error preparing file for DM: {fe}")
                             
+                    # Send original content and files as a separate embed (in markdown)
+                    content_display = original_content or "*No text content*"
+                    if len(content_display) > 2048:
+                        content_display = content_display[:2045] + "..."
+                        
+                    followup_embed = discord.Embed(
+                        title="Removed post",
+                        description=content_display,
+                        color=discord.Color.light_grey()
+                    )
                     if files:
-                        await message.author.send(embed=embed, files=files)
+                        await message.author.send(embed=followup_embed, files=files)
                     else:
-                        await message.author.send(embed=embed)
+                        await message.author.send(embed=followup_embed)
+
             except Exception as e:
                 print(f"Could not DM user {message.author.id}: {e}")
 
