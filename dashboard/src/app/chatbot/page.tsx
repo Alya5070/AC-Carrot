@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Children } from "react";
 import { MessageSquare, Save, Plus, Trash2, Layers, ShieldAlert, Shield } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { useGuild } from "../../context/GuildContext";
@@ -19,12 +19,40 @@ function DiscordMarkdown({ content, channels = [], roles = [] }: { content: stri
   let processed = content
     .replace(/<@!?(\d+)>/g, "[mention-user:$1](https://discord.com)")
     .replace(/<@&(\d+)>/g, "[mention-role:$1](https://discord.com)")
-    .replace(/<#(\d+)>/g, "[mention-channel:$1](https://discord.com)");
+    .replace(/<#(\d+)>/g, "[mention-channel:$1](https://discord.com)")
+    .replace(/<:([\w_]+):(\d+)>/g, "[emoji-static:$1:$2](https://discord.com)")
+    .replace(/<a:([\w_]+):(\d+)>/g, "[emoji-animated:$1:$2](https://discord.com)");
 
   const components: any = {
     a: ({ href, children }: any) => {
       const text = children?.[0];
       if (typeof text === "string") {
+        if (text.startsWith("emoji-static:")) {
+          const parts = text.split(":");
+          const name = parts[1];
+          const id = parts[2];
+          return (
+            <img
+              src={`https://cdn.discordapp.com/emojis/${id}.png`}
+              alt={`:${name}:`}
+              title={`:${name}:`}
+              className="inline-block h-[22px] w-[22px] align-bottom select-all mx-0.5"
+            />
+          );
+        }
+        if (text.startsWith("emoji-animated:")) {
+          const parts = text.split(":");
+          const name = parts[1];
+          const id = parts[2];
+          return (
+            <img
+              src={`https://cdn.discordapp.com/emojis/${id}.gif`}
+              alt={`:${name}:`}
+              title={`:${name}:`}
+              className="inline-block h-[22px] w-[22px] align-bottom select-all mx-0.5"
+            />
+          );
+        }
         if (text.startsWith("mention-user:")) {
           const userId = text.split(":")[1];
           return (
@@ -58,7 +86,34 @@ function DiscordMarkdown({ content, channels = [], roles = [] }: { content: stri
         </a>
       );
     },
-    p: ({ children }: any) => <p className="whitespace-pre-wrap leading-relaxed mb-2 break-words text-[14px]">{children}</p>,
+    p: ({ children }: any) => <div className="whitespace-pre-wrap leading-relaxed mb-2 last:mb-0 break-words text-[14px]">{children}</div>,
+    blockquote: ({ children }: any) => {
+      const validChildren = Children.toArray(children).filter((child: any) => {
+        if (!child) return false;
+        if (typeof child === "string" && !child.trim()) return false;
+        if (child.props && child.props.children) {
+          const inner = child.props.children;
+          if (typeof inner === "string" && !inner.trim()) return false;
+          if (Array.isArray(inner) && inner.every(item => typeof item === "string" && !item.trim())) return false;
+        }
+        return true;
+      });
+      return (
+        <blockquote className="border-l-[4px] border-[#4e5058] pl-4 my-1.5 text-[#dbdee1] space-y-1 [&_p]:mb-0 [&_div]:mb-0">
+          {validChildren}
+        </blockquote>
+      );
+    },
+    ul: ({ children }: any) => <ul className="list-disc list-outside pl-6 space-y-1 my-1.5">{children}</ul>,
+    ol: ({ children }: any) => <ol className="list-decimal list-outside pl-6 space-y-1 my-1.5">{children}</ol>,
+    li: ({ children }: any) => (
+      <li className="text-[14px] text-[#dbdee1] leading-relaxed break-words pl-1 [&_p]:!mb-0 [&_div]:!mb-0">
+        {children}
+      </li>
+    ),
+    h1: ({ children }: any) => <h1 className="font-extrabold text-white text-[20px] mt-4 mb-2">{children}</h1>,
+    h2: ({ children }: any) => <h2 className="font-bold text-white text-[17px] mt-3.5 mb-1.5">{children}</h2>,
+    h3: ({ children }: any) => <h3 className="font-semibold text-white text-[15px] mt-3 mb-1">{children}</h3>,
     code: ({ inline, className, children }: any) => {
       if (inline) {
         return <code className="bg-[#2b2d31] text-[#dbdee1] px-1 py-0.5 rounded font-mono text-[13px]">{children}</code>;
@@ -626,30 +681,30 @@ export default function ChatbotPage() {
           <div className="text-xs font-semibold text-teal-500 uppercase tracking-wider">Live Chatbot Preview (Interactive)</div>
 
           {/* Discord client Mock container */}
-          <div className="bg-[#313338] text-[#dbdee1] font-sans text-sm rounded-xl p-4 border border-[#1e1f22] shadow-2xl flex flex-col gap-4 min-h-[400px] relative">
+          <div className="bg-[#313338] text-[#dbdee1] font-['gg_sans','Noto_Sans',sans-serif] text-[16px] rounded-xl p-4 border border-[#1e1f22] shadow-2xl flex flex-col gap-4 min-h-[400px] relative hover:bg-[#2e3035]/30 transition-colors">
             
             {/* Main Message Block */}
-            <div className="flex gap-3.5">
+            <div className="flex gap-4">
               {/* Avatar thumbnail */}
-              <div className="w-10 h-10 rounded-full bg-[#e85a29] text-white flex items-center justify-center font-bold text-sm shrink-0 select-none">
+              <div className="w-10 h-10 rounded-full bg-[#e85a29] text-white flex items-center justify-center font-bold text-[15px] shrink-0 select-none">
                 C
               </div>
 
               {/* Message block */}
-              <div className="flex-1 space-y-2 min-w-0">
-                <div className="flex items-center gap-1.5 select-none">
-                  <span className="font-semibold text-white text-[15px] hover:underline cursor-pointer">Carrot</span>
-                  <span className="bg-[#5865F2] text-white text-[10px] font-bold px-1 py-0.5 rounded tracking-wide uppercase">Bot</span>
-                  <span className="text-xs text-[#949ba4]">Today at {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              <div className="flex-1 space-y-1 min-w-0">
+                <div className="flex items-center gap-1.5 select-none mb-0.5">
+                  <span className="font-medium text-[#f2f3f5] text-[16px] hover:underline cursor-pointer">Carrot</span>
+                  <span className="bg-[#5865F2] text-white text-[10px] font-medium px-1 py-[1px] rounded-[3px] uppercase self-center h-fit">Bot</span>
+                  <span className="text-[12px] text-[#949ba4] ml-1">Today at {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
 
                 {/* Rich Embed container */}
                 {activeMenu && (
-                  <div className="border-l-4 border-[#e85a29] rounded bg-[#2b2d31] p-3.5 max-w-[480px] shadow-sm animate-in zoom-in-95 duration-200 flex flex-col justify-between">
+                  <div className="border-l-[4px] border-[#e85a29] rounded-[4px] bg-[#2b2d31] p-3.5 max-w-[480px] shadow-sm animate-in zoom-in-95 duration-200 flex flex-col justify-between mb-2">
                     <div>
-                      <h4 className="font-bold text-white text-[15px] mb-2">🥕 Carrot Assistant</h4>
+                      <h4 className="font-bold text-white text-[15px] mb-1">🥕 Carrot Assistant</h4>
                       {activeMenu.text ? (
-                      <div className="whitespace-pre-wrap text-[14px] text-[#dbdee1] leading-relaxed break-words">
+                      <div className="whitespace-pre-wrap text-[14px] text-[#dbdee1] leading-[1.375rem] break-words">
                         <DiscordMarkdown content={activeMenu.text} />
                         {extractImages(activeMenu.text).map((url, i) => (
                           <div key={i} className="mt-2 rounded-lg overflow-hidden max-w-full max-h-64 border border-white/5">
@@ -662,7 +717,7 @@ export default function ChatbotPage() {
                       )}
                     </div>
 
-                    <div className="text-[11px] text-[#949ba4] font-medium mt-4 border-t border-[#3f4248]/20 pt-2 flex justify-between items-center">
+                    <div className="text-[11px] text-[#949ba4] font-medium mt-3 border-t border-[#3f4248]/20 pt-2 flex justify-between items-center">
                       <span>Made by @moriluna</span>
                     </div>
                   </div>
