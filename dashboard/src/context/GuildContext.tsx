@@ -1,11 +1,13 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { apiFetch } from "../lib/api";
 
 export type GuildInfo = {
   id: string;
   name: string;
   icon: string | null;
+  access_level?: "admin" | "view";
 };
 
 interface GuildContextType {
@@ -24,7 +26,7 @@ export function GuildProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-    fetch(`${apiUrl}/api/guilds`)
+    apiFetch(`${apiUrl}/api/guilds`)
       .then(res => res.json())
       .then(data => {
         if (data.guilds && data.guilds.length > 0) {

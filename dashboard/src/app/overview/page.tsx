@@ -5,6 +5,7 @@ import { Activity, ShieldAlert, CreditCard, Bell } from "lucide-react";
 import Link from "next/link";
 import { useGuild } from "../../context/GuildContext";
 import { OverviewChart } from "../../components/OverviewChart";
+import { apiFetch } from "../../lib/api";
 
 type Warning = {
   id: number;
@@ -58,19 +59,19 @@ export default function OverviewPage() {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
     // Fetch Stats
-    fetch(`${apiUrl}/api/guilds/${selectedGuildId}/stats`)
+    apiFetch(`${apiUrl}/api/guilds/${selectedGuildId}/stats`)
       .then((res) => res.json())
       .then((data) => setStats(data))
       .catch((err) => console.error("Error fetching stats:", err));
 
     // Fetch Recent Warnings (limit 5)
-    fetch(`${apiUrl}/api/guilds/${selectedGuildId}/warnings?limit=5`)
+    apiFetch(`${apiUrl}/api/guilds/${selectedGuildId}/warnings?limit=5`)
       .then((res) => res.json())
       .then((data) => setRecentWarnings(data.warnings || []))
       .catch((err) => console.error("Error fetching warnings:", err));
 
     // Fetch Recent Requests (limit 5)
-    fetch(`${apiUrl}/api/guilds/${selectedGuildId}/paid-requests?limit=5`)
+    apiFetch(`${apiUrl}/api/guilds/${selectedGuildId}/paid-requests?limit=5`)
       .then((res) => res.json())
       .then((data) => setRecentRequests(data.requests || []))
       .catch((err) => console.error("Error fetching requests:", err));

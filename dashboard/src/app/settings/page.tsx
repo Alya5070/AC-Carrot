@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Settings, Save, AlertTriangle, Plus, X, Info, HelpCircle } from "lucide-react";
 import { useGuild } from "../../context/GuildContext";
+import { apiFetch } from "../../lib/api";
 
 type GuildConfig = {
   staff_notice_channel_id: string | null;
@@ -56,8 +57,8 @@ export default function SettingsPage() {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
     Promise.all([
-      fetch(`${apiUrl}/api/guilds/${selectedGuildId}/config`).then(res => res.json()),
-      fetch(`${apiUrl}/api/guilds/${selectedGuildId}/warning-reasons`).then(res => res.json())
+      apiFetch(`${apiUrl}/api/guilds/${selectedGuildId}/config`).then(res => res.json()),
+      apiFetch(`${apiUrl}/api/guilds/${selectedGuildId}/warning-reasons`).then(res => res.json())
     ])
       .then(([configData, reasonsData]) => {
         setConfig(configData);
@@ -110,7 +111,7 @@ export default function SettingsPage() {
 
     try {
       // Save Config
-      const configRes = await fetch(`${apiUrl}/api/guilds/${selectedGuildId}/config`, {
+      const configRes = await apiFetch(`${apiUrl}/api/guilds/${selectedGuildId}/config`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(config)
@@ -118,7 +119,7 @@ export default function SettingsPage() {
       if (!configRes.ok) throw new Error("Config save failed");
 
       // Save Reasons
-      const reasonsRes = await fetch(`${apiUrl}/api/guilds/${selectedGuildId}/warning-reasons`, {
+      const reasonsRes = await apiFetch(`${apiUrl}/api/guilds/${selectedGuildId}/warning-reasons`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reasons })
@@ -137,7 +138,7 @@ export default function SettingsPage() {
   const handlePurge = async () => {
     if (confirm("WARNING: This will permanently delete ALL paid requests from the database. Are you absolutely sure?")) {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      await fetch(`${apiUrl}/api/guilds/${selectedGuildId}/paid-requests/purge`, { method: "POST" });
+      await apiFetch(`${apiUrl}/api/guilds/${selectedGuildId}/paid-requests/purge`, { method: "POST" });
       alert("Paid requests have been purged.");
     }
   };
@@ -191,19 +192,30 @@ export default function SettingsPage() {
         </aside>
 
         <div className="flex-1 min-w-0 glass-panel border border-teal-900/30 rounded-xl p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold text-white">
-              {activeTab === 'verbal' ? 'Verbal Warnings Configuration' : 'Paid Request Parameters'}
-            </h2>
-            <button
-              onClick={saveSettings}
-              disabled={saving}
-              className="bg-teal-500 hover:bg-teal-400 text-teal-950 px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
-            >
-              <Save className="w-4 h-4" />
-              {saving ? "Saving..." : "Save Settings"}
-            </button>
+                  <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+            <Settings className="w-6 h-6 text-teal-400" />
+            Server Configuration
+          </h2>
+          <button 
+            onClick={handleSave} 
+            disabled={saving || isViewOnly}
+            className="bg-teal-500 hover:bg-teal-600 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors"
+          >
+            <Save className="w-4 h-4" />
+            {saving ? "Saving..." : "Save Settings"}
+          </button>
+        </div>
+        
+        {isViewOnly && (
+          <div className="bg-yellow-900/20 border border-yellow-500/30 text-yellow-200 p-4 rounded-lg mb-6 flex gap-3">
+            <AlertTriangle className="w-5 h-5 text-yellow-400 shrink-0" />
+            <div>
+              <h3 className="font-semibold text-yellow-400">View-Only Mode</h3>
+              <p className="text-sm">You have moderator access to view settings, but Administrator permissions are required to make changes.</p>
+            </div>
           </div>
+        )}
 
           {activeTab === 'verbal' && (
             <div className="flex border-b border-teal-900/20 pb-0.5 mb-6 gap-6">
@@ -254,42 +266,42 @@ export default function SettingsPage() {
                       Staff Notice Channel ID
                       <div className="group relative flex items-center"><HelpCircle className="w-3.5 h-3.5 text-gray-500 cursor-help" /><div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block w-64 p-2 bg-gray-800 border border-teal-900/50 text-xs text-gray-200 rounded shadow-xl z-50 text-center pointer-events-none whitespace-normal normal-case">Channel where all verbal warning notices are sent.</div></div>
                     </label>
-                    <input type="text" value={config.staff_notice_channel_id || ""} onChange={e => handleIdChange("staff_notice_channel_id", e.target.value)} className="w-full bg-surface-dark border border-teal-900/40 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500/50" />
+                    <input type="text" disabled={isViewOnly} value={config.staff_notice_channel_id || ""} onChange={e => handleIdChange("staff_notice_channel_id", e.target.value)} className="w-full bg-surface-dark border border-teal-900/40 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500/50" />
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs text-gray-400 font-medium uppercase flex items-center gap-1">
                       Staff Commands Channel ID
                       <div className="group relative flex items-center"><HelpCircle className="w-3.5 h-3.5 text-gray-500 cursor-help" /><div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block w-64 p-2 bg-gray-800 border border-teal-900/50 text-xs text-gray-200 rounded shadow-xl z-50 text-center pointer-events-none whitespace-normal normal-case">If set, staff commands like !warn are restricted to this channel.</div></div>
                     </label>
-                    <input type="text" value={config.staff_commands_channel_id || ""} onChange={e => handleIdChange("staff_commands_channel_id", e.target.value)} className="w-full bg-surface-dark border border-teal-900/40 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500/50" />
+                    <input type="text" disabled={isViewOnly} value={config.staff_commands_channel_id || ""} onChange={e => handleIdChange("staff_commands_channel_id", e.target.value)} className="w-full bg-surface-dark border border-teal-900/40 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500/50" />
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs text-gray-400 font-medium uppercase flex items-center gap-1">
                       Staff Log Channel ID
                       <div className="group relative flex items-center"><HelpCircle className="w-3.5 h-3.5 text-gray-500 cursor-help" /><div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block w-64 p-2 bg-gray-800 border border-teal-900/50 text-xs text-gray-200 rounded shadow-xl z-50 text-center pointer-events-none whitespace-normal normal-case">Channel where issued warnings and deleted messages are logged.</div></div>
                     </label>
-                    <input type="text" value={config.staff_log_channel_id || ""} onChange={e => handleIdChange("staff_log_channel_id", e.target.value)} className="w-full bg-surface-dark border border-teal-900/40 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500/50" />
+                    <input type="text" disabled={isViewOnly} value={config.staff_log_channel_id || ""} onChange={e => handleIdChange("staff_log_channel_id", e.target.value)} className="w-full bg-surface-dark border border-teal-900/40 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500/50" />
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs text-gray-400 font-medium uppercase flex items-center gap-1">
                       Team Leader Role ID
                       <div className="group relative flex items-center"><HelpCircle className="w-3.5 h-3.5 text-gray-500 cursor-help" /><div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block w-64 p-2 bg-gray-800 border border-teal-900/50 text-xs text-gray-200 rounded shadow-xl z-50 text-center pointer-events-none whitespace-normal normal-case">Role ID for Team Leaders (can issue warnings and review requests).</div></div>
                     </label>
-                    <input type="text" value={config.team_leader_role_id || ""} onChange={e => handleIdChange("team_leader_role_id", e.target.value)} className="w-full bg-surface-dark border border-teal-900/40 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500/50" />
+                    <input type="text" disabled={isViewOnly} value={config.team_leader_role_id || ""} onChange={e => handleIdChange("team_leader_role_id", e.target.value)} className="w-full bg-surface-dark border border-teal-900/40 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500/50" />
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs text-gray-400 font-medium uppercase flex items-center gap-1">
                       Moderator Role ID
                       <div className="group relative flex items-center"><HelpCircle className="w-3.5 h-3.5 text-gray-500 cursor-help" /><div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block w-64 p-2 bg-gray-800 border border-teal-900/50 text-xs text-gray-200 rounded shadow-xl z-50 text-center pointer-events-none whitespace-normal normal-case">Role ID for Moderators (can issue warnings and review requests).</div></div>
                     </label>
-                    <input type="text" value={config.moderator_role_id || ""} onChange={e => handleIdChange("moderator_role_id", e.target.value)} className="w-full bg-surface-dark border border-teal-900/40 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500/50" />
+                    <input type="text" disabled={isViewOnly} value={config.moderator_role_id || ""} onChange={e => handleIdChange("moderator_role_id", e.target.value)} className="w-full bg-surface-dark border border-teal-900/40 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500/50" />
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs text-gray-400 font-medium uppercase flex items-center gap-1">
                       Trial Moderator Role ID
                       <div className="group relative flex items-center"><HelpCircle className="w-3.5 h-3.5 text-gray-500 cursor-help" /><div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block w-64 p-2 bg-gray-800 border border-teal-900/50 text-xs text-gray-200 rounded shadow-xl z-50 text-center pointer-events-none whitespace-normal normal-case">Role ID for Trial Moderators (can issue warnings and review requests).</div></div>
                     </label>
-                    <input type="text" value={config.trial_moderator_role_id || ""} onChange={e => handleIdChange("trial_moderator_role_id", e.target.value)} className="w-full bg-surface-dark border border-teal-900/40 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500/50" />
+                    <input type="text" disabled={isViewOnly} value={config.trial_moderator_role_id || ""} onChange={e => handleIdChange("trial_moderator_role_id", e.target.value)} className="w-full bg-surface-dark border border-teal-900/40 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500/50" />
                   </div>
                   
                   <div className="md:col-span-2 mt-4 border-t border-teal-900/20 pt-4 flex items-center justify-between">
@@ -327,15 +339,13 @@ export default function SettingsPage() {
                 </div>
                 <button
                   onClick={async () => {
-                    const pwd = prompt("Enter Administrator Passcode to unlock this action:");
-                    if (pwd !== "admin123") return alert("Unauthorized.");
                     if (confirm("WARNING: This will permanently delete ALL verbal warnings from the database. Are you absolutely sure?")) {
                       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-                      await fetch(`${apiUrl}/api/guilds/${selectedGuildId}/warnings/purge`, { method: "POST" });
+                      await apiFetch(`${apiUrl}/api/guilds/${selectedGuildId}/warnings/purge`, { method: "POST" });
                       alert("Verbal warnings have been purged.");
                     }
                   }}
-                  className="bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                  className="bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled={isViewOnly}
                 >
                   Purge All Verbal Warnings
                 </button>
@@ -476,28 +486,28 @@ export default function SettingsPage() {
                       Submit Channel ID
                       <div className="group relative flex items-center"><HelpCircle className="w-3.5 h-3.5 text-gray-500 cursor-help" /><div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block w-64 p-2 bg-gray-800 border border-teal-900/50 text-xs text-gray-200 rounded shadow-xl z-50 text-center pointer-events-none whitespace-normal normal-case">Channel where users submit new paid requests via the button.</div></div>
                     </label>
-                    <input type="text" value={config.submit_channel_id || ""} onChange={e => handleIdChange("submit_channel_id", e.target.value)} className="w-full bg-surface-dark border border-teal-900/40 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500/50" />
+                    <input type="text" disabled={isViewOnly} value={config.submit_channel_id || ""} onChange={e => handleIdChange("submit_channel_id", e.target.value)} className="w-full bg-surface-dark border border-teal-900/40 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500/50" />
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs text-gray-400 font-medium uppercase flex items-center gap-1">
                       Review Channel ID
                       <div className="group relative flex items-center"><HelpCircle className="w-3.5 h-3.5 text-gray-500 cursor-help" /><div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block w-64 p-2 bg-gray-800 border border-teal-900/50 text-xs text-gray-200 rounded shadow-xl z-50 text-center pointer-events-none whitespace-normal normal-case">Private channel where staff review and approve/reject pending requests.</div></div>
                     </label>
-                    <input type="text" value={config.review_channel_id || ""} onChange={e => handleIdChange("review_channel_id", e.target.value)} className="w-full bg-surface-dark border border-teal-900/40 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500/50" />
+                    <input type="text" disabled={isViewOnly} value={config.review_channel_id || ""} onChange={e => handleIdChange("review_channel_id", e.target.value)} className="w-full bg-surface-dark border border-teal-900/40 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500/50" />
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs text-gray-400 font-medium uppercase flex items-center gap-1">
                       Approved Channel ID
                       <div className="group relative flex items-center"><HelpCircle className="w-3.5 h-3.5 text-gray-500 cursor-help" /><div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block w-64 p-2 bg-gray-800 border border-teal-900/50 text-xs text-gray-200 rounded shadow-xl z-50 text-center pointer-events-none whitespace-normal normal-case">Public channel where approved paid requests are displayed.</div></div>
                     </label>
-                    <input type="text" value={config.approved_channel_id || ""} onChange={e => handleIdChange("approved_channel_id", e.target.value)} className="w-full bg-surface-dark border border-teal-900/40 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500/50" />
+                    <input type="text" disabled={isViewOnly} value={config.approved_channel_id || ""} onChange={e => handleIdChange("approved_channel_id", e.target.value)} className="w-full bg-surface-dark border border-teal-900/40 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500/50" />
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs text-gray-400 font-medium uppercase flex items-center gap-1">
                       Approval Log Channel ID
                       <div className="group relative flex items-center"><HelpCircle className="w-3.5 h-3.5 text-gray-500 cursor-help" /><div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block w-64 p-2 bg-gray-800 border border-teal-900/50 text-xs text-gray-200 rounded shadow-xl z-50 text-center pointer-events-none whitespace-normal normal-case">Channel for audit logs of who approved or rejected requests.</div></div>
                     </label>
-                    <input type="text" value={config.approval_log_channel_id || ""} onChange={e => handleIdChange("approval_log_channel_id", e.target.value)} className="w-full bg-surface-dark border border-teal-900/40 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500/50" />
+                    <input type="text" disabled={isViewOnly} value={config.approval_log_channel_id || ""} onChange={e => handleIdChange("approval_log_channel_id", e.target.value)} className="w-full bg-surface-dark border border-teal-900/40 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500/50" />
                   </div>
                 </div>
               </div>
@@ -510,28 +520,28 @@ export default function SettingsPage() {
                       Active Limits per User
                       <div className="group relative flex items-center"><HelpCircle className="w-3.5 h-3.5 text-gray-500 cursor-help" /><div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block w-64 p-2 bg-gray-800 border border-teal-900/50 text-xs text-gray-200 rounded shadow-xl z-50 text-center pointer-events-none whitespace-normal normal-case">Max concurrent active/pending paid requests a user can have.</div></div>
                     </label>
-                    <input type="number" value={config.active_limit} onChange={e => handleConfigChange("active_limit", parseInt(e.target.value))} className="w-full bg-surface-dark border border-teal-900/40 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500/50" />
+                    <input type="number" disabled={isViewOnly} value={config.active_limit} onChange={e => handleConfigChange("active_limit", parseInt(e.target.value))} className="w-full bg-surface-dark border border-teal-900/40 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500/50" />
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs text-gray-400 font-medium uppercase flex items-center gap-1">
                       Reminder Threshold (Days)
                       <div className="group relative flex items-center"><HelpCircle className="w-3.5 h-3.5 text-gray-500 cursor-help" /><div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block w-64 p-2 bg-gray-800 border border-teal-900/50 text-xs text-gray-200 rounded shadow-xl z-50 text-center pointer-events-none whitespace-normal normal-case">Number of days before an active request is considered old/inactive.</div></div>
                     </label>
-                    <input type="number" value={config.reminder_threshold} onChange={e => handleConfigChange("reminder_threshold", parseInt(e.target.value))} className="w-full bg-surface-dark border border-teal-900/40 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500/50" />
+                    <input type="number" disabled={isViewOnly} value={config.reminder_threshold} onChange={e => handleConfigChange("reminder_threshold", parseInt(e.target.value))} className="w-full bg-surface-dark border border-teal-900/40 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500/50" />
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs text-gray-400 font-medium uppercase flex items-center gap-1">
                       Accepted Currencies (Regex)
                       <div className="group relative flex items-center"><HelpCircle className="w-3.5 h-3.5 text-gray-500 cursor-help" /><div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block w-64 p-2 bg-gray-800 border border-teal-900/50 text-xs text-gray-200 rounded shadow-xl z-50 text-center pointer-events-none whitespace-normal normal-case">Regex pattern of currencies allowed. If violated, request form triggers an error.</div></div>
                     </label>
-                    <input type="text" value={config.accepted_currencies} onChange={e => handleConfigChange("accepted_currencies", e.target.value)} className="w-full bg-surface-dark border border-teal-900/40 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500/50" />
+                    <input type="text" disabled={isViewOnly} value={config.accepted_currencies} onChange={e => handleConfigChange("accepted_currencies", e.target.value)} className="w-full bg-surface-dark border border-teal-900/40 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500/50" />
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs text-gray-400 font-medium uppercase flex items-center gap-1">
                       Accepted Payments (Comma separated)
                       <div className="group relative flex items-center"><HelpCircle className="w-3.5 h-3.5 text-gray-500 cursor-help" /><div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block w-64 p-2 bg-gray-800 border border-teal-900/50 text-xs text-gray-200 rounded shadow-xl z-50 text-center pointer-events-none whitespace-normal normal-case">Comma-separated list of payment platforms to display in the form placeholder.</div></div>
                     </label>
-                    <input type="text" value={config.accepted_payments} onChange={e => handleConfigChange("accepted_payments", e.target.value)} className="w-full bg-surface-dark border border-teal-900/40 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500/50" />
+                    <input type="text" disabled={isViewOnly} value={config.accepted_payments} onChange={e => handleConfigChange("accepted_payments", e.target.value)} className="w-full bg-surface-dark border border-teal-900/40 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500/50" />
                   </div>
                 </div>
                 <div className="mt-4 space-y-1">
@@ -539,7 +549,7 @@ export default function SettingsPage() {
                     Banned Terms Regex
                     <div className="group relative flex items-center"><HelpCircle className="w-3.5 h-3.5 text-gray-500 cursor-help" /><div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block w-64 p-2 bg-gray-800 border border-teal-900/50 text-xs text-gray-200 rounded shadow-xl z-50 text-center pointer-events-none whitespace-normal normal-case">Regex pattern of banned items (like robux or crypto). Reject form automatically if found.</div></div>
                   </label>
-                  <input type="text" value={config.banned_terms_regex} onChange={e => handleConfigChange("banned_terms_regex", e.target.value)} className="w-full bg-surface-dark border border-teal-900/40 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500/50 font-mono" placeholder="e.g. robux|crypto|btc" />
+                  <input type="text" disabled={isViewOnly} value={config.banned_terms_regex} onChange={e => handleConfigChange("banned_terms_regex", e.target.value)} className="w-full bg-surface-dark border border-teal-900/40 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-teal-500/50 font-mono" placeholder="e.g. robux|crypto|btc" />
                 </div>
               </div>
 
@@ -560,7 +570,7 @@ export default function SettingsPage() {
                     if (pwd !== "admin123") return alert("Unauthorized.");
                     handlePurge();
                   }}
-                  className="bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                  className="bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled={isViewOnly}
                 >
                   Purge All Paid Requests
                 </button>

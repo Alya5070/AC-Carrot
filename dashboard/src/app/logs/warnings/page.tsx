@@ -4,8 +4,9 @@ import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { ShieldAlert, Search, Trash2, RefreshCw, Clock, MessageSquare, ExternalLink, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter } from "lucide-react";
-import ReactMarkdown from "react-markdown";
+import { formatDistanceToNow } from "date-fns";
 import { useGuild } from "../../../context/GuildContext";
+import { apiFetch } from "../../../lib/api";
 
 type Attachment = {
   filename: string;
@@ -51,7 +52,7 @@ function WarningsPageContent() {
     if (warningIdParam) {
       const warningId = parseInt(warningIdParam, 10);
       if (!isNaN(warningId)) {
-        fetch(`${apiUrl}/api/warnings/${warningId}`)
+        apiFetch(`${apiUrl}/api/warnings/${warningId}`)
           .then(res => {
             if (res.ok) return res.json();
             throw new Error("Warning not found");
@@ -93,7 +94,7 @@ function WarningsPageContent() {
       search: searchQuery,
       staff: staffFilter === "All" ? "" : staffFilter
     });
-    fetch(`${apiUrl}/api/guilds/${selectedGuildId}/warnings?${params}`)
+    apiFetch(`${apiUrl}/api/guilds/${selectedGuildId}/warnings?${params}`)
       .then((res) => res.json())
       .then((data) => {
         setWarnings(data.warnings || []);
@@ -151,7 +152,7 @@ function WarningsPageContent() {
     }
 
     try {
-      const res = await fetch(`${apiUrl}/api/guilds/${selectedGuildId}/warnings/${selectedWarning.id}`, {
+      const res = await apiFetch(`${apiUrl}/api/guilds/${selectedGuildId}/warnings/${selectedWarning.id}`, {
         method: "DELETE"
       });
       if (res.ok) {

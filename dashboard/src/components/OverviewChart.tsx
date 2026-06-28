@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useGuild } from "../context/GuildContext";
+import { apiFetch } from "../lib/api";
 
 export function OverviewChart() {
   const { selectedGuildId, loading: guildLoading } = useGuild();
@@ -21,7 +22,7 @@ export function OverviewChart() {
     setLoading(true);
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-    fetch(`${apiUrl}/api/guilds/${selectedGuildId}/analytics?period=${period}`)
+    apiFetch(`${apiUrl}/api/guilds/${selectedGuildId}/analytics?period=${period}`)
       .then(res => res.json())
       .then(raw => {
         // Support both { data: [...] } and a bare array response shape

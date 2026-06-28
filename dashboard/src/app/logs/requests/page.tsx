@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { CreditCard, Search, RefreshCw, X, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter } from "lucide-react";
 import { useGuild } from "../../../context/GuildContext";
+import { apiFetch } from "../../../lib/api";
 
 type PaidRequest = {
   request_id: number;
@@ -54,7 +55,7 @@ export default function RequestsPage() {
       status: statusFilter === "All" ? "" : statusFilter,
       staff: staffFilter === "All" ? "" : staffFilter
     });
-    fetch(`${apiUrl}/api/guilds/${selectedGuildId}/paid-requests?${params}`)
+    apiFetch(`${apiUrl}/api/guilds/${selectedGuildId}/paid-requests?${params}`)
       .then((res) => res.json())
       .then((data) => {
         setRequests(data.requests || []);

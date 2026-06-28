@@ -1,23 +1,49 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Header, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import List, Optional
 import database
 import os
+import time
+import aiohttp
+import discord
 
 app = FastAPI()
+
+from fastapi.responses import JSONResponse
+from collections import defaultdict
+
+# Simple sliding window rate limiter (100 requests per minute per IP)
+ip_rate_limits = defaultdict(list)
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    client_ip = request.client.host if request.client else "unknown"
+    now = time.time()
+    
+    # Clean up old timestamps (older than 60 seconds)
+    ip_rate_limits[client_ip] = [ts for ts in ip_rate_limits[client_ip] if now - ts < 60]
+    
+    if len(ip_rate_limits[client_ip]) > 150:
+        return JSONResponse(status_code=429, content={"detail": "Too many requests. Please try again later."})
+        
+    ip_rate_limits[client_ip].append(now)
+    response = await call_next(request)
+    return response
+
 
 # Mount static files for attachments
 app.mount("/api/attachments", StaticFiles(directory=database.ATTACHMENTS_DIR), name="attachments")
 
 # Enable CORS for Next.js frontend
+dashboard_origins = os.getenv("DASHBOARD_CORS_ORIGINS", "http://localhost:3000").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=dashboard_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 # Reference to the Discord bot client for dynamic username resolution
@@ -25,6 +51,91 @@ bot_client = None
 
 # Simple in-memory cache to prevent Discord API rate limiting
 user_cache = {}
+token_cache = {}
+permission_cache = {}
+
+
+async def log_dashboard_action(guild_id: int, user_id: str, action: str):
+    if not bot_client:
+        return
+    config = await database.get_guild_config(guild_id)
+    if not config or not config.get("staff_log_channel_id"):
+        return
+    channel = bot_client.get_channel(config["staff_log_channel_id"])
+    if channel:
+        try:
+            await channel.send(f"🛡️ **Dashboard Action:** <@{user_id}> {action}")
+        except Exception:
+            pass
+
+async def get_discord_user_id(authorization: str = Header(None)) -> str:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    
+    token = authorization.split("Bearer ")[1]
+    
+    now = time.time()
+    if token in token_cache and token_cache[token][1] > now:
+        return token_cache[token][0]
+        
+    async with aiohttp.ClientSession() as session:
+        async with session.get("https://discord.com/api/users/@me", headers={"Authorization": f"Bearer {token}"}) as resp:
+            if resp.status != 200:
+                raise HTTPException(status_code=401, detail="Invalid Discord token")
+            data = await resp.json()
+            user_id = data.get("id")
+            token_cache[token] = (user_id, now + 600) # 10 minutes cache
+            return user_id
+
+async def get_user_access_level(guild_id: int, user_id: str = Depends(get_discord_user_id)) -> str:
+    cache_key = f"{guild_id}_{user_id}"
+    now = time.time()
+    if cache_key in permission_cache and permission_cache[cache_key][1] > now:
+        return permission_cache[cache_key][0]
+        
+    if not bot_client:
+        return "none"
+        
+    guild = bot_client.get_guild(guild_id)
+    if not guild:
+        return "none"
+        
+    member = guild.get_member(int(user_id))
+    if not member:
+        try:
+            member = await guild.fetch_member(int(user_id))
+        except discord.NotFound:
+            permission_cache[cache_key] = ("none", now + 120)
+            return "none"
+        except Exception:
+            return "none"
+            
+    if member.guild_permissions.administrator or member.guild_permissions.manage_guild:
+        permission_cache[cache_key] = ("admin", now + 120)
+        return "admin"
+        
+    config = await database.get_guild_config(guild_id)
+    if config:
+        role_ids = [r.id for r in member.roles]
+        if config.get("team_leader_role_id") in role_ids:
+            permission_cache[cache_key] = ("admin", now + 120)
+            return "admin"
+        if config.get("moderator_role_id") in role_ids or config.get("trial_moderator_role_id") in role_ids:
+            permission_cache[cache_key] = ("view", now + 120)
+            return "view"
+            
+    permission_cache[cache_key] = ("none", now + 120)
+    return "none"
+
+async def requires_view_access(guild_id: int, access_level: str = Depends(get_user_access_level)):
+    if access_level not in ["admin", "view"]:
+        raise HTTPException(status_code=403, detail="Forbidden: You do not have access to this server's dashboard.")
+    return access_level
+
+async def requires_admin_access(guild_id: int, access_level: str = Depends(get_user_access_level)):
+    if access_level != "admin":
+        raise HTTPException(status_code=403, detail="Forbidden: Requires Server Administrator or Team Leader access.")
+    return access_level
 
 def set_bot_client(client):
     global bot_client
@@ -277,8 +388,8 @@ async def get_warnings(
 
     return {"warnings": page_warnings, "total": filtered_total, "staff_list": all_staff_names}
 
-@app.get("/api/warnings/{warning_id}")
-async def get_single_warning(request: Request, warning_id: int):
+@app.get("/api/guilds/{guild_id}/warnings/{warning_id}")
+async def get_single_warning(request: Request, guild_id: int, warning_id: int, access_level: str = Depends(requires_view_access)):
     warn = await database.get_warning_by_id(warning_id)
     if not warn:
         raise HTTPException(status_code=404, detail="Warning not found")
@@ -333,7 +444,7 @@ async def get_single_warning(request: Request, warning_id: int):
 
 
 @app.get("/api/guilds/{guild_id}/warning-reasons")
-async def get_warning_reasons(guild_id: int):
+async def get_warning_reasons(guild_id: int, access_level: str = Depends(requires_view_access)):
     async with database.aiosqlite.connect(database.DB_NAME) as db:
         db.row_factory = database.aiosqlite.Row
         cursor = await db.execute('''
@@ -492,7 +603,7 @@ async def get_paid_requests(
     return {"requests": page_requests, "total": filtered_total, "staff_list": all_staff_names}
 
 @app.get("/api/guilds/{guild_id}/stats")
-async def get_stats(guild_id: int):
+async def get_stats(guild_id: int, access_level: str = Depends(requires_view_access)):
     async with database.aiosqlite.connect(database.DB_NAME) as db:
         # Pending requests
         cursor = await db.execute("SELECT COUNT(*) FROM paid_requests WHERE status = 'pending'")
@@ -558,7 +669,7 @@ class GuildConfig(BaseModel):
 
 
 @app.get("/api/guilds/{guild_id}/analytics")
-async def get_analytics(guild_id: int, period: str = "month"):
+async def get_analytics(guild_id: int, period: str = "month", access_level: str = Depends(requires_view_access)):
     # period can be "week", "month", "year"
     days = 30
     if period == "week":
@@ -628,9 +739,22 @@ async def get_analytics(guild_id: int, period: str = "month"):
         return {"data": list(timeline.values())}
 
 @app.get("/api/guilds")
-async def get_guilds():
-    if bot_client:
-        return {"guilds": [{"id": str(g.id), "name": g.name, "icon": g.icon.url if g.icon else None} for g in bot_client.guilds]}
+async def get_guilds(user_id: str = Depends(get_discord_user_id)):
+    if not bot_client:
+        return {"guilds": []}
+        
+    user_guilds = []
+    for g in bot_client.guilds:
+        access_level = await get_user_access_level(g.id, user_id)
+        if access_level in ["admin", "view"]:
+            user_guilds.append({
+                "id": str(g.id), 
+                "name": g.name, 
+                "icon": g.icon.url if g.icon else None,
+                "access_level": access_level
+            })
+            
+    return {"guilds": user_guilds}
     else:
         # Bot not attached — collect distinct non-zero guild IDs from all relevant tables
         async with database.aiosqlite.connect(database.DB_NAME) as db:
@@ -648,7 +772,7 @@ async def get_guilds():
 
 
 @app.get("/api/guilds/{guild_id}/config")
-async def get_config(guild_id: int):
+async def get_config(guild_id: int, access_level: str = Depends(requires_view_access)):
     async with database.aiosqlite.connect(database.DB_NAME) as db:
         db.row_factory = database.aiosqlite.Row
         
@@ -669,7 +793,7 @@ async def get_config(guild_id: int):
         return GuildConfig().model_dump()
 
 @app.post("/api/guilds/{guild_id}/config")
-async def save_config(guild_id: int, config: GuildConfig):
+async def save_config(guild_id: int, config: GuildConfig, access_level: str = Depends(requires_admin_access), user_id: str = Depends(get_discord_user_id)):
     async with database.aiosqlite.connect(database.DB_NAME) as db:
         # Resolve guild_id 0 to actual guild_id if it exists
         if guild_id == 0:
@@ -717,6 +841,7 @@ async def save_config(guild_id: int, config: GuildConfig):
                 int(config.dm_on_warning)
             ))
         await db.commit()
+    await log_dashboard_action(guild_id, user_id, "updated the verbal warning reasons via the dashboard.")
     return {"status": "success"}
 
 class VerbalReason(BaseModel):
@@ -728,7 +853,7 @@ class VerbalReasonsUpdate(BaseModel):
     reasons: List[VerbalReason]
 
 @app.post("/api/guilds/{guild_id}/warning-reasons")
-async def save_warning_reasons(guild_id: int, data: VerbalReasonsUpdate):
+async def save_warning_reasons(guild_id: int, data: VerbalReasonsUpdate, access_level: str = Depends(requires_admin_access), user_id: str = Depends(get_discord_user_id)):
     async with database.aiosqlite.connect(database.DB_NAME) as db:
         # Delete existing reasons for this guild only
         await db.execute("DELETE FROM verbal_reasons WHERE guild_id = ?", (guild_id,))
@@ -740,10 +865,11 @@ async def save_warning_reasons(guild_id: int, data: VerbalReasonsUpdate):
             ''', (r.id, r.label, r.text, guild_id))
             
         await db.commit()
+    await log_dashboard_action(guild_id, user_id, "updated the verbal warning reasons via the dashboard.")
     return {"status": "success"}
 
 @app.post("/api/guilds/{guild_id}/paid-requests/purge")
-async def purge_paid_requests(guild_id: int):
+async def purge_paid_requests(guild_id: int, access_level: str = Depends(requires_admin_access), user_id: str = Depends(get_discord_user_id)):
     async with database.aiosqlite.connect(database.DB_NAME) as db:
         if guild_id == 0:
             await db.execute("DELETE FROM paid_requests")
@@ -753,6 +879,7 @@ async def purge_paid_requests(guild_id: int):
                 pass
         else:
             await db.execute("DELETE FROM paid_requests WHERE guild_id = ?", (guild_id,))
+        await log_dashboard_action(guild_id, user_id, "PURGED all paid requests from the database.")
             # Reset ID counter if no requests are left in the database at all
             cursor = await db.execute("SELECT COUNT(*) FROM paid_requests")
             count = (await cursor.fetchone())[0]
@@ -762,20 +889,23 @@ async def purge_paid_requests(guild_id: int):
                 except database.aiosqlite.OperationalError:
                     pass
         await db.commit()
+    await log_dashboard_action(guild_id, user_id, "updated the verbal warning reasons via the dashboard.")
     return {"status": "success"}
 
 @app.post("/api/guilds/{guild_id}/warnings/purge")
-async def purge_warnings(guild_id: int):
+async def purge_warnings(guild_id: int, access_level: str = Depends(requires_admin_access), user_id: str = Depends(get_discord_user_id)):
     async with database.aiosqlite.connect(database.DB_NAME) as db:
         if guild_id == 0:
             await db.execute("DELETE FROM warnings")
         else:
             await db.execute("DELETE FROM warnings WHERE guild_id = ?", (guild_id,))
+        await log_dashboard_action(guild_id, user_id, "PURGED all verbal warnings from the database.")
         await db.commit()
+    await log_dashboard_action(guild_id, user_id, "updated the verbal warning reasons via the dashboard.")
     return {"status": "success"}
 
 @app.delete("/api/guilds/{guild_id}/warnings/{warning_id}")
-async def delete_warning(guild_id: int, warning_id: int):
+async def delete_warning(guild_id: int, warning_id: int, access_level: str = Depends(requires_admin_access), user_id: str = Depends(get_discord_user_id)):
     # Fetch the warning first
     warn = await database.get_warning_by_id(warning_id)
     if not warn:
@@ -850,7 +980,7 @@ async def delete_warning(guild_id: int, warning_id: int):
 
 
 @app.get("/api/guilds/{guild_id}/reminders")
-async def get_reminders(guild_id: int):
+async def get_reminders(guild_id: int, access_level: str = Depends(requires_view_access)):
     async with database.aiosqlite.connect(database.DB_NAME) as db:
         db.row_factory = database.aiosqlite.Row
         
@@ -875,9 +1005,11 @@ async def get_reminders(guild_id: int):
 
     return {"reminders": reminders}
 
-@app.delete("/api/reminders/{reminder_id}")
-async def delete_reminder(reminder_id: int):
+@app.delete("/api/guilds/{guild_id}/reminders/{reminder_id}")
+async def delete_reminder(guild_id: int, reminder_id: int, access_level: str = Depends(requires_admin_access), user_id: str = Depends(get_discord_user_id)):
     async with database.aiosqlite.connect(database.DB_NAME) as db:
         await db.execute("DELETE FROM reminders WHERE id = ?", (reminder_id,))
+        await log_dashboard_action(guild_id, user_id, f"deleted reminder ID #{reminder_id}.")
         await db.commit()
+    await log_dashboard_action(guild_id, user_id, "updated the verbal warning reasons via the dashboard.")
     return {"status": "success"}

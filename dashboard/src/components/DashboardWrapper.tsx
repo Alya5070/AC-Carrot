@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation";
 import { Menu, X, Server, LayoutDashboard, ShieldAlert, PenTool, Bot, Settings } from "lucide-react";
 import { useGuild } from "../context/GuildContext";
 
+import { LoginButton } from "./LoginButton";
+
 export function DashboardWrapper({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname();
@@ -69,13 +71,7 @@ export function DashboardWrapper({ children }: { children: React.ReactNode }) {
           })}
         </nav>
         <div className="p-4 border-t border-teal-900/30">
-          <div className="flex items-center gap-3 px-3 py-2">
-            <div className="w-8 h-8 rounded-full bg-gray-700"></div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white truncate">Guest User</p>
-              <p className="text-xs text-gray-400 truncate">Not authenticated</p>
-            </div>
-          </div>
+          <LoginButton />
         </div>
       </aside>
 

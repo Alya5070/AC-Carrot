@@ -2,7 +2,9 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { Bell, Search, Trash2, RefreshCw, Calendar, MessageSquare, Clock, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Filter } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
 import { useGuild } from "../../../context/GuildContext";
+import { apiFetch } from "../../../lib/api";
 
 type Reminder = {
   id: number;
@@ -35,7 +37,7 @@ export default function RemindersPage() {
     }
     setLoading(true);
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-    fetch(`${apiUrl}/api/guilds/${selectedGuildId}/reminders`)
+    apiFetch(`${apiUrl}/api/guilds/${selectedGuildId}/reminders`)
       .then((res) => res.json())
       .then((data) => {
         setReminders(data.reminders || []);
@@ -63,7 +65,7 @@ export default function RemindersPage() {
 
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
     try {
-      const res = await fetch(`${apiUrl}/api/guilds/${selectedGuildId}/reminders/${id}`, { method: "DELETE" });
+      const res = await apiFetch(`${apiUrl}/api/guilds/${selectedGuildId}/reminders/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Delete failed");
 
       setReminders(reminders.filter(r => r.id !== id));
