@@ -26,7 +26,21 @@ class PaidRequest(commands.Cog):
             user_id = req['user_id']
             req_id = req['request_id']
             
-            user = self.bot.get_user(user_id)
+            guild_id = req.get('guild_id')
+            guild = self.bot.get_guild(guild_id) if guild_id else None
+            member = guild.get_member(user_id) if guild else None
+            if guild and not member:
+                try:
+                    member = await guild.fetch_member(user_id)
+                except discord.HTTPException:
+                    member = None
+                    
+            if guild and not member:
+                # User left the server, mark the request as invalid
+                await database.update_paid_request_status(req_id, 'invalid', actioned_by=self.bot.user.id)
+                continue
+                
+            user = member
             if not user:
                 try:
                     user = await self.bot.fetch_user(user_id)

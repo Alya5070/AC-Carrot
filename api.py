@@ -1127,10 +1127,10 @@ async def get_guild_channels(guild_id: int, access_level: str = Depends(requires
     # Add text channels
     for c in guild.text_channels:
         channels.append({"id": str(c.id), "name": f"#{c.name}"})
-    # Add active threads
-    for t in guild.threads:
-        parent_name = f" ({t.parent.name})" if t.parent else ""
-        channels.append({"id": str(t.id), "name": f"🧵 {t.name}{parent_name}"})
+    # Add forum channels
+    if hasattr(guild, "forums"):
+        for f in guild.forums:
+            channels.append({"id": str(f.id), "name": f"📢 {f.name} (Forum)"})
         
     return {"channels": channels}
 

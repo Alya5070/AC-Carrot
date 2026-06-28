@@ -57,6 +57,9 @@ export default function MessageBuilderPage() {
   const [activeEmbedIdx, setActiveEmbedIdx] = useState<number | null>(null);
   
   const [suppressNotifications, setSuppressNotifications] = useState(false);
+  
+  const [customChannelId, setCustomChannelId] = useState("");
+  const [isCustomChannel, setIsCustomChannel] = useState(false);
 
   // Auto-fetch message content on ID paste
   useEffect(() => {
@@ -67,8 +70,9 @@ export default function MessageBuilderPage() {
 
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
     const params = new URLSearchParams();
-    if (selectedChannelId && selectedChannelId !== "0") {
-      params.set("channel_id", selectedChannelId);
+    const activeChan = isCustomChannel ? customChannelId : selectedChannelId;
+    if (activeChan && activeChan !== "0") {
+      params.set("channel_id", activeChan);
     }
 
     apiFetch(`${apiUrl}/api/guilds/${selectedGuildId}/messages/${cleanId}?${params}`)
@@ -77,7 +81,16 @@ export default function MessageBuilderPage() {
         return res.json();
       })
       .then((data) => {
-        if (data.channel_id) setSelectedChannelId(data.channel_id);
+        if (data.channel_id) {
+          const exists = channels.some((c) => c.id === data.channel_id);
+          if (exists) {
+            setIsCustomChannel(false);
+            setSelectedChannelId(data.channel_id);
+          } else {
+            setIsCustomChannel(true);
+            setCustomChannelId(data.channel_id);
+          }
+        }
         if (data.message_text !== undefined) setMessageText(data.message_text);
         if (data.embeds) {
           setEmbeds(data.embeds);
@@ -91,7 +104,7 @@ export default function MessageBuilderPage() {
       .catch((err) => {
         console.error("Failed to auto-retrieve message info:", err);
       });
-  }, [messageId, selectedGuildId]);
+  }, [messageId, selectedGuildId, channels]);
 
   useEffect(() => {
     if (!selectedGuildId || selectedGuildId === "0" || !isAdmin) {
@@ -199,8 +212,9 @@ export default function MessageBuilderPage() {
 
   const handleSendMessage = async () => {
     if (sending) return;
-    if (!selectedChannelId) {
-      alert("Please select a target channel!");
+    const targetChannel = isCustomChannel ? customChannelId : selectedChannelId;
+    if (!targetChannel) {
+      alert("Please select or enter a target channel!");
       return;
     }
     
@@ -218,7 +232,7 @@ export default function MessageBuilderPage() {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
     const payload = {
-      channel_id: selectedChannelId,
+      channel_id: targetChannel,
       message_id: messageId || null,
       message_text: messageText || null,
       embeds: nonOptionEmbeds.length > 0 ? nonOptionEmbeds : null,
@@ -247,6 +261,8 @@ export default function MessageBuilderPage() {
       setActiveEmbedIdx(null);
       setMessageId("");
       setSuppressNotifications(false);
+      setCustomChannelId("");
+      setIsCustomChannel(false);
     } catch (err: any) {
       console.error(err);
       alert(`Error sending message: ${err.message}`);
@@ -312,8 +328,15 @@ export default function MessageBuilderPage() {
               <div className="space-y-1.5">
                 <label className="text-xs text-gray-400 font-medium">Broadcast Channel</label>
                 <select
-                  value={selectedChannelId}
-                  onChange={(e) => setSelectedChannelId(e.target.value)}
+                  value={isCustomChannel ? "custom" : selectedChannelId}
+                  onChange={(e) => {
+                    if (e.target.value === "custom") {
+                      setIsCustomChannel(true);
+                    } else {
+                      setIsCustomChannel(false);
+                      setSelectedChannelId(e.target.value);
+                    }
+                  }}
                   className="w-full bg-surface-darker border border-teal-950/60 rounded-lg text-sm text-white px-3 py-2 focus:outline-none focus:border-teal-500/40 animate-none"
                 >
                   {channels.map((c) => (
@@ -321,6 +344,7 @@ export default function MessageBuilderPage() {
                       {c.name}
                     </option>
                   ))}
+                  <option value="custom">⚙️ Custom Channel/Thread ID...</option>
                 </select>
               </div>
 
@@ -347,6 +371,19 @@ export default function MessageBuilderPage() {
                 />
               </div>
             </div>
+
+            {isCustomChannel && (
+              <div className="space-y-1.5 pt-2 border-t border-teal-950/20 animate-in fade-in duration-200">
+                <label className="text-xs text-teal-400 font-semibold uppercase tracking-wider">Custom Target Channel/Thread ID</label>
+                <input
+                  type="text"
+                  placeholder="Paste exact 17-20 digit channel or thread ID..."
+                  value={customChannelId}
+                  onChange={(e) => setCustomChannelId(e.target.value.trim())}
+                  className="w-full bg-surface-darker border border-teal-500/30 rounded-lg text-sm text-white px-3 py-2 focus:outline-none focus:border-teal-500"
+                />
+              </div>
+            )}
 
             <div className="flex items-center justify-between pt-2 border-t border-teal-950/20">
               <div className="flex flex-col">
