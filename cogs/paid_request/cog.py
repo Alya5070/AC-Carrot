@@ -38,6 +38,22 @@ class PaidRequest(commands.Cog):
             if guild and not member:
                 # User left the server, mark the request as invalid
                 await database.update_paid_request_status(req_id, 'invalid', actioned_by=self.bot.user.id)
+                
+                # Delete the public approved message in the channel
+                config = await database.get_guild_config(guild_id)
+                approved_channel_id = config.get("approved_channel_id") or 0
+                approved_channel = self.bot.get_channel(approved_channel_id)
+                if not approved_channel and approved_channel_id:
+                    try:
+                        approved_channel = await self.bot.fetch_channel(approved_channel_id)
+                    except discord.HTTPException:
+                        pass
+                if approved_channel and req.get('approved_msg_id'):
+                    try:
+                        msg = await approved_channel.fetch_message(req['approved_msg_id'])
+                        await msg.delete()
+                    except (discord.NotFound, discord.HTTPException):
+                        pass
                 continue
                 
             user = member
