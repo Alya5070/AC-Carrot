@@ -755,20 +755,6 @@ async def get_guilds(user_id: str = Depends(get_discord_user_id)):
             })
             
     return {"guilds": user_guilds}
-    else:
-        # Bot not attached — collect distinct non-zero guild IDs from all relevant tables
-        async with database.aiosqlite.connect(database.DB_NAME) as db:
-            guild_ids = set()
-
-            for table, col in [("guild_configs", "guild_id"), ("warnings", "guild_id"), ("paid_requests", "guild_id")]:
-                try:
-                    cursor = await db.execute(f"SELECT DISTINCT {col} FROM {table} WHERE {col} IS NOT NULL AND {col} != 0")
-                    rows = await cursor.fetchall()
-                    guild_ids.update(row[0] for row in rows)
-                except Exception:
-                    pass  # table may not exist yet
-
-            return {"guilds": [{"id": str(gid), "name": f"Server {gid}", "icon": None} for gid in sorted(guild_ids)]}
 
 
 @app.get("/api/guilds/{guild_id}/config")
@@ -841,7 +827,6 @@ async def save_config(guild_id: int, config: GuildConfig, access_level: str = De
                 int(config.dm_on_warning)
             ))
         await db.commit()
-    await log_dashboard_action(guild_id, user_id, "updated the verbal warning reasons via the dashboard.")
     return {"status": "success"}
 
 class VerbalReason(BaseModel):
@@ -865,7 +850,6 @@ async def save_warning_reasons(guild_id: int, data: VerbalReasonsUpdate, access_
             ''', (r.id, r.label, r.text, guild_id))
             
         await db.commit()
-    await log_dashboard_action(guild_id, user_id, "updated the verbal warning reasons via the dashboard.")
     return {"status": "success"}
 
 @app.post("/api/guilds/{guild_id}/paid-requests/purge")
@@ -879,17 +863,19 @@ async def purge_paid_requests(guild_id: int, access_level: str = Depends(require
                 pass
         else:
             await db.execute("DELETE FROM paid_requests WHERE guild_id = ?", (guild_id,))
+            
         await log_dashboard_action(guild_id, user_id, "PURGED all paid requests from the database.")
-            # Reset ID counter if no requests are left in the database at all
-            cursor = await db.execute("SELECT COUNT(*) FROM paid_requests")
-            count = (await cursor.fetchone())[0]
-            if count == 0:
-                try:
-                    await db.execute("DELETE FROM sqlite_sequence WHERE name='paid_requests'")
-                except database.aiosqlite.OperationalError:
-                    pass
+        
+        # Reset ID counter if no requests are left in the database at all
+        cursor = await db.execute("SELECT COUNT(*) FROM paid_requests")
+        count = (await cursor.fetchone())[0]
+        if count == 0:
+            try:
+                await db.execute("DELETE FROM sqlite_sequence WHERE name='paid_requests'")
+            except database.aiosqlite.OperationalError:
+                pass
+                
         await db.commit()
-    await log_dashboard_action(guild_id, user_id, "updated the verbal warning reasons via the dashboard.")
     return {"status": "success"}
 
 @app.post("/api/guilds/{guild_id}/warnings/purge")
@@ -901,7 +887,6 @@ async def purge_warnings(guild_id: int, access_level: str = Depends(requires_adm
             await db.execute("DELETE FROM warnings WHERE guild_id = ?", (guild_id,))
         await log_dashboard_action(guild_id, user_id, "PURGED all verbal warnings from the database.")
         await db.commit()
-    await log_dashboard_action(guild_id, user_id, "updated the verbal warning reasons via the dashboard.")
     return {"status": "success"}
 
 @app.delete("/api/guilds/{guild_id}/warnings/{warning_id}")
@@ -1011,5 +996,4 @@ async def delete_reminder(guild_id: int, reminder_id: int, access_level: str = D
         await db.execute("DELETE FROM reminders WHERE id = ?", (reminder_id,))
         await log_dashboard_action(guild_id, user_id, f"deleted reminder ID #{reminder_id}.")
         await db.commit()
-    await log_dashboard_action(guild_id, user_id, "updated the verbal warning reasons via the dashboard.")
     return {"status": "success"}
