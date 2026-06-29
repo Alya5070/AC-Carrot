@@ -214,13 +214,20 @@ class WarningTracker(commands.Cog):
                 reason_text = reason_text[:1021] + "..."
             log_embed.add_field(name="Rejection Reason", value=reason_text, inline=False)
             
-            content_snippet = resolved_content
-
-            if len(content_snippet) > 800:
-                content_snippet = content_snippet[:800] + "..."
-            
             dashboard_url = os.getenv("DASHBOARD_URL", "http://localhost:3000")
             log_link = f"[log](https://{dashboard_url}/guilds/{message.guild.id if message.guild else 0}/logs/warnings/{warn_id})"
+
+            # Original Post Content (without link is 10 chars for formatting: ```\n\n```\n, with link is 10 + len(log_link) + 1 for newline)
+            content_snippet = resolved_content
+            if all_attachments:
+                allowed_content_len = 1024 - 10
+            else:
+                allowed_content_len = 1024 - 11 - len(log_link)
+            
+            # Cap at 800 for readability, but restrict by allowed length too
+            max_content_len = min(800, allowed_content_len - 3)
+            if len(content_snippet) > max_content_len:
+                content_snippet = content_snippet[:max_content_len] + "..."
 
             if all_attachments:
                 # Add Original Post Content (without link)
@@ -231,8 +238,9 @@ class WarningTracker(commands.Cog):
                 )
                 # Add Attachments (with link)
                 attachments_list = "\n".join([a.url for a in all_attachments])
-                if len(attachments_list) > 950:
-                    attachments_list = attachments_list[:950] + "..."
+                allowed_attachments_len = 1024 - 2 - len(log_link) - 3 # 2 for \n\n, 3 for "..."
+                if len(attachments_list) > allowed_attachments_len:
+                    attachments_list = attachments_list[:allowed_attachments_len] + "..."
                 attachments_list += f"\n\n{log_link}"
                 log_embed.add_field(name="Attachments", value=attachments_list, inline=False)
             else:
@@ -506,9 +514,11 @@ class WarningTracker(commands.Cog):
                 dashboard_url = os.getenv("DASHBOARD_URL", "http://localhost:3000")
                 log_link = f"[log](https://{dashboard_url}/guilds/{message.guild.id if message.guild else 0}/logs/warnings/{warn_id})"
                 
+                # Format original post content to fit under 1024 (11 chars for ```\n\n```\n, and length of log_link)
                 reason_desc = original_content
-                if len(reason_desc) > 1000:
-                    reason_desc = reason_desc[:997] + "..."
+                allowed_desc_len = 1024 - 11 - len(log_link) - 3 # 3 for "..."
+                if len(reason_desc) > allowed_desc_len:
+                    reason_desc = reason_desc[:allowed_desc_len] + "..."
                 log_embed.add_field(
                     name="Original Post Content",
                     value=f"```\n{reason_desc}\n```\n{log_link}",
@@ -517,8 +527,9 @@ class WarningTracker(commands.Cog):
                 
                 if all_attachments:
                     attachments_list = "\n".join([a.url for a in all_attachments])
-                    if len(attachments_list) > 1024:
-                        attachments_list = attachments_list[:1020] + "..."
+                    allowed_attachments_len = 1024 - 3 # 3 for "..."
+                    if len(attachments_list) > allowed_attachments_len:
+                        attachments_list = attachments_list[:allowed_attachments_len] + "..."
                     log_embed.add_field(name="Notice Attachments", value=attachments_list, inline=False)
 
                 try:
