@@ -42,6 +42,7 @@ class ACCarrotBot(commands.Bot):
         await self.load_extension("cogs.chatbot")
         await self.load_extension("cogs.message_builder")
         await self.load_extension("cogs.reminders")
+        await self.load_extension("cogs.vacation_manager")
         print("Cogs loaded.")
         
         # Start FastAPI server alongside Discord bot

@@ -263,8 +263,8 @@ class WarningTracker(commands.Cog):
         # DM the user if not a bot
         if not message.author.bot:
             try:
-                count = await database.get_warnings_count_last_3_months(message.author.id)
-                previous_warnings = await database.get_warnings_last_3_months(message.author.id)
+                count = await database.get_warnings_count_last_3_months(message.author.id, guild_id=message.guild.id if message.guild else None)
+                previous_warnings = await database.get_warnings_last_3_months(message.author.id, guild_id=message.guild.id if message.guild else None)
                 history = previous_warnings[1:] if len(previous_warnings) > 1 else []
                 is_repeat = is_repeated_offense(reason, history)
                 timestamp_str = datetime.now(timezone.utc).strftime("%d/%m/%Y")
@@ -341,7 +341,7 @@ class WarningTracker(commands.Cog):
                 print(f"Could not DM user {message.author.id}: {e}")
 
         # Warning threshold check (3 warnings in 3 months)
-        count = await database.get_warnings_count_last_3_months(message.author.id)
+        count = await database.get_warnings_count_last_3_months(message.author.id, guild_id=message.guild.id if message.guild else None)
         if count >= 3:
             guild_config = await database.get_guild_config(message.guild.id if message.guild else 0)
             commands_channel_id = guild_config.get("staff_commands_channel_id") or 0
@@ -352,7 +352,7 @@ class WarningTracker(commands.Cog):
                 except Exception:
                     pass
             if commands_channel:
-                last_warnings = await database.get_warnings_last_3_months(message.author.id)
+                last_warnings = await database.get_warnings_last_3_months(message.author.id, guild_id=message.guild.id if message.guild else None)
                 last_warnings.reverse()
                 
                 formatted_warnings = []
@@ -538,11 +538,11 @@ class WarningTracker(commands.Cog):
                     print(f"Error sending manual warn log embed: {e}")
             
             # Check warning count
-            count = await database.get_warnings_count_last_3_months(user.id)
+            count = await database.get_warnings_count_last_3_months(user.id, guild_id=message.guild.id if message.guild else None)
             
             # DM the user
             try:
-                previous_warnings = await database.get_warnings_last_3_months(user.id)
+                previous_warnings = await database.get_warnings_last_3_months(user.id, guild_id=message.guild.id if message.guild else None)
                 history = previous_warnings[1:] if len(previous_warnings) > 1 else []
                 
                 is_repeat = is_repeated_offense(message.content, history)
@@ -593,7 +593,7 @@ class WarningTracker(commands.Cog):
                 print(f"Could not DM user {user.id}: {e}")
             
             if count >= 3 and commands_channel:
-                last_warnings = await database.get_warnings_last_3_months(user.id)
+                last_warnings = await database.get_warnings_last_3_months(user.id, guild_id=guild.id if guild else None)
                 last_warnings.reverse()
                 
                 formatted_warnings = []

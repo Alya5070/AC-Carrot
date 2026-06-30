@@ -126,7 +126,7 @@ class CustomRemovalReasonModal(discord.ui.Modal, title="Reason for removal"):
             formatted_list = "\n".join([f"- {r}" for r in self.predefined_reasons] + [f"- {custom_reason_sanitized}"])
             reason = f"Your post has been removed from {chan_mention} due to:\n{formatted_list}"
         else:
-            reason = f"Your post has been removed from {chan_mention} due to {custom_reason_sanitized}."
+            reason = f"Your post has been removed from {chan_mention} due to {custom_reason_sanitized}"
 
         preview_desc = (
             f"Are you sure you want to remove the post by {self.target_message.author.mention}?\n\n"

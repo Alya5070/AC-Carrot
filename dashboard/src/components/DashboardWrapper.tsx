@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X, Server, LayoutDashboard, ShieldAlert, PenTool, Bot, Settings } from "lucide-react";
+import { Menu, X, Server, LayoutDashboard, ShieldAlert, PenTool, Bot, Settings, Palmtree } from "lucide-react";
 import { useGuild } from "../context/GuildContext";
 
 import { LoginButton } from "./LoginButton";
@@ -30,6 +30,7 @@ export function DashboardWrapper({ children }: { children: React.ReactNode }) {
     ...(isAdmin ? [
       { href: "/builder", label: "Message Builder", icon: PenTool },
       { href: "/chatbot", label: "Chatbot", icon: Bot },
+      { href: "/vacations", label: "Vacation Manager", icon: Palmtree },
     ] : []),
     { href: "/settings", label: "Guild Settings", icon: Settings },
   ];

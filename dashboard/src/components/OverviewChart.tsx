@@ -94,12 +94,22 @@ export function OverviewChart() {
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#ffffff0a" vertical={false} />
               <XAxis 
-                dataKey="displayDate" 
+                dataKey="date" 
                 stroke="#6b7280" 
                 fontSize={12}
                 tickLine={false}
                 axisLine={false}
                 minTickGap={20}
+                tickFormatter={(value) => {
+                  try {
+                    const date = new Date(value);
+                    return period === "year"
+                      ? date.toLocaleDateString('en-US', { month: 'short' })
+                      : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                  } catch (e) {
+                    return value;
+                  }
+                }}
               />
               <YAxis 
                 stroke="#6b7280" 
@@ -117,6 +127,16 @@ export function OverviewChart() {
                 }}
                 itemStyle={{ fontSize: '14px', fontWeight: 500 }}
                 labelStyle={{ color: '#9ca3af', marginBottom: '4px', fontSize: '12px' }}
+                labelFormatter={(value) => {
+                  try {
+                    const date = new Date(value);
+                    return period === "year"
+                      ? date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+                      : date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+                  } catch (e) {
+                    return value;
+                  }
+                }}
               />
               <Area 
                 type="monotone" 

@@ -704,75 +704,98 @@ class GuildConfig(BaseModel):
     accepted_payments: str = "PayPal, Stripe, CashApp, Venmo, Ko-Fi"
     banned_terms_regex: str = "robux|robuck|robucks|crypto|btc|eth|sol|ltc|usdt|usdc"
     dm_on_warning: bool = True
+    vacation_role_id: Optional[str] = None
+    vacation_role_id_2: Optional[str] = None
+    vacation_secondary_guild_id: Optional[str] = None
+    vacation_strip_roles_1: Optional[str] = None
+    vacation_strip_roles_2: Optional[str] = None
 
 
 @app.get("/api/guilds/{guild_id}/analytics")
 async def get_analytics(guild_id: int, period: str = "month", access_level: str = Depends(requires_view_access)):
     # period can be "week", "month", "year"
-    days = 30
-    if period == "week":
-        days = 7
-    elif period == "year":
-        days = 365
+    # Determine grouping and time range
+    if period == "year":
+        # Group by month for the last 12 months
+        group_func = "strftime('%Y-%m', {col})"
+        time_filter = "date({col}) >= date('now', '-1 year')"
+    else:
+        # Group by day
+        days = 7 if period == "week" else 30
+        group_func = "date({col})"
+        time_filter = f"date({{col}}) >= date('now', '-{days} days')"
         
     async with database.aiosqlite.connect(database.DB_NAME) as db:
         db.row_factory = database.aiosqlite.Row
         
-        # Get warnings grouped by date
+        warn_col = "warned_at"
+        req_col = "created_at"
+        
+        # Get warnings
         if guild_id == 0:
             w_cursor = await db.execute(f"""
-                SELECT date(warned_at) as day, COUNT(*) as count 
+                SELECT {group_func.format(col=warn_col)} as period_key, COUNT(*) as count 
                 FROM warnings 
-                WHERE date(warned_at) >= date('now', '-{days} days')
-                GROUP BY date(warned_at)
-                ORDER BY day ASC
+                WHERE {time_filter.format(col=warn_col)}
+                GROUP BY period_key
+                ORDER BY period_key ASC
             """)
         else:
             w_cursor = await db.execute(f"""
-                SELECT date(warned_at) as day, COUNT(*) as count 
+                SELECT {group_func.format(col=warn_col)} as period_key, COUNT(*) as count 
                 FROM warnings 
-                WHERE guild_id = ? AND date(warned_at) >= date('now', '-{days} days')
-                GROUP BY date(warned_at)
-                ORDER BY day ASC
+                WHERE guild_id = ? AND {time_filter.format(col=warn_col)}
+                GROUP BY period_key
+                ORDER BY period_key ASC
             """, (guild_id,))
         warn_rows = await w_cursor.fetchall()
         
-        # Get paid requests grouped by date, scoped to guild
+        # Get paid requests
         if guild_id == 0:
             p_cursor = await db.execute(f"""
-                SELECT date(created_at) as day, COUNT(*) as count 
+                SELECT {group_func.format(col=req_col)} as period_key, COUNT(*) as count 
                 FROM paid_requests 
-                WHERE date(created_at) >= date('now', '-{days} days')
-                GROUP BY date(created_at)
-                ORDER BY day ASC
+                WHERE {time_filter.format(col=req_col)}
+                GROUP BY period_key
+                ORDER BY period_key ASC
             """)
         else:
             p_cursor = await db.execute(f"""
-                SELECT date(created_at) as day, COUNT(*) as count 
+                SELECT {group_func.format(col=req_col)} as period_key, COUNT(*) as count 
                 FROM paid_requests 
-                WHERE guild_id = ? AND date(created_at) >= date('now', '-{days} days')
-                GROUP BY date(created_at)
-                ORDER BY day ASC
+                WHERE guild_id = ? AND {time_filter.format(col=req_col)}
+                GROUP BY period_key
+                ORDER BY period_key ASC
             """, (guild_id,))
         paid_rows = await p_cursor.fetchall()
         
-        # Merge them into a single timeline array for Recharts
+        # Merge them into a single timeline array
         timeline = {}
         from datetime import datetime, timedelta
+        from dateutil.relativedelta import relativedelta
         
-        # Prefill timeline with 0s to ensure the chart doesn't skip days
-        today = datetime.utcnow().date()
-        for i in range(days):
-            d = (today - timedelta(days=days - 1 - i)).isoformat()
-            timeline[d] = {"date": d, "warnings": 0, "requests": 0}
+        # Prefill timeline to ensure no gaps
+        today = datetime.utcnow()
+        if period == "year":
+            # 12 months
+            for i in range(12):
+                d = (today - relativedelta(months=11 - i)).strftime('%Y-%m')
+                timeline[d] = {"date": d, "warnings": 0, "requests": 0}
+        else:
+            # days
+            for i in range(days):
+                d = (today - timedelta(days=days - 1 - i)).date().isoformat()
+                timeline[d] = {"date": d, "warnings": 0, "requests": 0}
             
         for r in warn_rows:
-            if r["day"] in timeline:
-                timeline[r["day"]]["warnings"] = r["count"]
+            key = r["period_key"]
+            if key in timeline:
+                timeline[key]["warnings"] = r["count"]
                 
         for r in paid_rows:
-            if r["day"] in timeline:
-                timeline[r["day"]]["requests"] = r["count"]
+            key = r["period_key"]
+            if key in timeline:
+                timeline[key]["requests"] = r["count"]
                 
         return {"data": list(timeline.values())}
 
@@ -809,7 +832,7 @@ async def get_config(guild_id: int, access_level: str = Depends(requires_view_ac
         if row:
             config_dict = dict(row)
             for k, v in config_dict.items():
-                if k.endswith('_id') and v is not None:
+                if (k.endswith('_id') or k == 'vacation_role_id_2') and v is not None:
                     config_dict[k] = str(v)
             return config_dict
         
@@ -827,43 +850,32 @@ async def save_config(guild_id: int, config: GuildConfig, access_level: str = De
         else:
             actual_guild_id = guild_id
 
+        # Get only explicitly provided fields
+        provided_data = config.model_dump(exclude_unset=True)
+        
+        # Convert dm_on_warning bool to int if provided
+        if "dm_on_warning" in provided_data and provided_data["dm_on_warning"] is not None:
+            provided_data["dm_on_warning"] = int(provided_data["dm_on_warning"])
+
         # Check if exists
         cursor = await db.execute("SELECT 1 FROM guild_configs WHERE guild_id = ?", (actual_guild_id,))
         exists = await cursor.fetchone()
         
         if exists:
-            await db.execute('''
-                UPDATE guild_configs SET 
-                    staff_notice_channel_id = ?, staff_commands_channel_id = ?, staff_log_channel_id = ?,
-                    team_leader_role_id = ?, moderator_role_id = ?, trial_moderator_role_id = ?,
-                    submit_channel_id = ?, review_channel_id = ?, approved_channel_id = ?, approval_log_channel_id = ?,
-                    active_limit = ?, reminder_threshold = ?, accepted_currencies = ?, accepted_payments = ?, banned_terms_regex = ?,
-                    dm_on_warning = ?
-                WHERE guild_id = ?
-            ''', (
-                config.staff_notice_channel_id, config.staff_commands_channel_id, config.staff_log_channel_id,
-                config.team_leader_role_id, config.moderator_role_id, config.trial_moderator_role_id,
-                config.submit_channel_id, config.review_channel_id, config.approved_channel_id, config.approval_log_channel_id,
-                config.active_limit, config.reminder_threshold, config.accepted_currencies, config.accepted_payments, config.banned_terms_regex,
-                int(config.dm_on_warning),
-                actual_guild_id
-            ))
+            if provided_data:
+                # Dynamically build UPDATE query for sent fields only
+                set_clause = ", ".join([f"{k} = ?" for k in provided_data.keys()])
+                values = list(provided_data.values()) + [actual_guild_id]
+                await db.execute(f"UPDATE guild_configs SET {set_clause} WHERE guild_id = ?", values)
         else:
-            await db.execute('''
-                INSERT INTO guild_configs (
-                    guild_id, staff_notice_channel_id, staff_commands_channel_id, staff_log_channel_id,
-                    team_leader_role_id, moderator_role_id, trial_moderator_role_id,
-                    submit_channel_id, review_channel_id, approved_channel_id, approval_log_channel_id,
-                    active_limit, reminder_threshold, accepted_currencies, accepted_payments, banned_terms_regex,
-                    dm_on_warning
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                actual_guild_id, config.staff_notice_channel_id, config.staff_commands_channel_id, config.staff_log_channel_id,
-                config.team_leader_role_id, config.moderator_role_id, config.trial_moderator_role_id,
-                config.submit_channel_id, config.review_channel_id, config.approved_channel_id, config.approval_log_channel_id,
-                config.active_limit, config.reminder_threshold, config.accepted_currencies, config.accepted_payments, config.banned_terms_regex,
-                int(config.dm_on_warning)
-            ))
+            # Insert with whatever fields are provided
+            all_fields = {"guild_id": actual_guild_id}
+            all_fields.update(provided_data)
+            
+            columns = ", ".join(all_fields.keys())
+            placeholders = ", ".join(["?" for _ in all_fields])
+            await db.execute(f"INSERT INTO guild_configs ({columns}) VALUES ({placeholders})", list(all_fields.values()))
+            
         await db.commit()
     return {"status": "success"}
 
@@ -967,11 +979,26 @@ async def delete_warning(guild_id: int, warning_id: int, access_level: str = Dep
                     if not log_channel:
                         log_channel = await bot_client.fetch_channel(log_channel_id)
                     if log_channel:
+                        # Resolve the staff member who performed the action on the dashboard
+                        staff_user = None
+                        try:
+                            sid = int(user_id)
+                            staff_user = bot_client.get_user(sid)
+                            if not staff_user:
+                                staff_user = await bot_client.fetch_user(sid)
+                        except Exception:
+                            pass
+
+                        if staff_user:
+                            staff_str = f"{staff_user.mention} ({staff_user.id})"
+                        else:
+                            staff_str = f"<@{user_id}> ({user_id})"
+
                         log_embed = discord.Embed(
                             title="Log: Verbal Notice Deleted/Revoked (via Dashboard)",
                             color=discord.Color.red()
                         )
-                        log_embed.add_field(name="Staff Member", value="Dashboard / Web Admin", inline=True)
+                        log_embed.add_field(name="Staff Member", value=staff_str, inline=True)
                         log_embed.add_field(name="Target User", value=f"<@{warn['user_id']}> ({warn['user_id']})", inline=True)
                         log_embed.add_field(name="Warning ID", value=f"#{warning_id}", inline=True)
                         log_embed.add_field(name="Original Reason", value=warn['reason'][:1000] if warn['reason'] else "None", inline=False)
@@ -1381,4 +1408,229 @@ async def get_builder_message(
         "embeds": embeds_data,
         "reaction_roles": reaction_roles,
         "thread_name": msg.thread.name if msg.thread else ""
+    }
+
+class VacationRequest(BaseModel):
+    user_id: str
+    reason: Optional[str] = None
+
+@app.get("/api/guilds/{guild_id}/vacations")
+async def get_vacations(guild_id: int, access_level: str = Depends(requires_view_access)):
+    if guild_id == 0:
+        async with database.aiosqlite.connect(database.DB_NAME) as db:
+            cursor = await db.execute("SELECT guild_id FROM guild_configs LIMIT 1")
+            row = await cursor.fetchone()
+            actual_guild_id = row[0] if row else 0
+    else:
+        actual_guild_id = guild_id
+
+    records = await database.get_all_active_vacations(actual_guild_id)
+    results = []
+    
+    guild = None
+    if bot_client:
+        try:
+            guild = bot_client.get_guild(actual_guild_id)
+            if not guild:
+                guild = await bot_client.fetch_guild(actual_guild_id)
+        except Exception:
+            pass
+
+    for r in records:
+        user_id = r["user_id"]
+        username = f"User {user_id}"
+        avatar_url = ""
+        
+        if guild:
+            try:
+                member = guild.get_member(user_id)
+                if not member:
+                    member = await guild.fetch_member(user_id)
+                if member:
+                    username = member.display_name
+                    avatar_url = member.display_avatar.url
+            except Exception:
+                try:
+                    user = await bot_client.fetch_user(user_id)
+                    if user:
+                        username = user.display_name
+                        avatar_url = user.display_avatar.url
+                except Exception:
+                    pass
+
+        duration_str = "Just now"
+        try:
+            start_dt = None
+            for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%dT%H:%M:%S.%f', '%Y-%m-%dT%H:%M:%S'):
+                try:
+                    start_dt = datetime.strptime(r["vacation_start"], fmt).replace(tzinfo=timezone.utc)
+                    break
+                except ValueError:
+                    continue
+            if start_dt:
+                diff = datetime.now(timezone.utc) - start_dt
+                if diff.days > 365:
+                    duration_str = f"{diff.days // 365} year(s) ago"
+                elif diff.days > 30:
+                    duration_str = f"{diff.days // 30} month(s) ago"
+                elif diff.days > 0:
+                    duration_str = f"{diff.days} day(s) ago"
+                elif diff.seconds > 3600:
+                    duration_str = f"{diff.seconds // 3600} hour(s) ago"
+                elif diff.seconds > 60:
+                    duration_str = f"{diff.seconds // 60} minute(s) ago"
+                else:
+                    duration_str = "Just now"
+        except Exception:
+            pass
+
+        results.append({
+            "user_id": str(user_id),
+            "username": username,
+            "avatar_url": avatar_url,
+            "reason": r["reason"] or "No reason provided",
+            "vacation_start": r["vacation_start"],
+            "duration": duration_str
+        })
+    return results
+
+@app.post("/api/guilds/{guild_id}/vacations")
+async def create_vacation(guild_id: int, body: VacationRequest, access_level: str = Depends(requires_admin_access)):
+    if not bot_client:
+        raise HTTPException(status_code=503, detail="Discord bot is not currently running.")
+        
+    if guild_id == 0:
+        async with database.aiosqlite.connect(database.DB_NAME) as db:
+            cursor = await db.execute("SELECT guild_id FROM guild_configs LIMIT 1")
+            row = await cursor.fetchone()
+            actual_guild_id = row[0] if row else 0
+    else:
+        actual_guild_id = guild_id
+
+    guild = bot_client.get_guild(actual_guild_id)
+    if not guild:
+        try:
+            guild = await bot_client.fetch_guild(actual_guild_id)
+        except Exception:
+            raise HTTPException(status_code=404, detail="Guild not found or inaccessible by bot.")
+
+    try:
+        uid = int(body.user_id)
+        member = guild.get_member(uid)
+        if not member:
+            member = await guild.fetch_member(uid)
+    except Exception:
+        raise HTTPException(status_code=404, detail=f"Member with ID {body.user_id} not found in this server.")
+
+    cog = bot_client.get_cog("VacationManager")
+    if not cog:
+        raise HTTPException(status_code=500, detail="VacationManager cog is not loaded in the bot.")
+
+    try:
+        msg = await cog.start_vacation(guild, member, body.reason)
+        return {"status": "success", "message": msg}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/guilds/{guild_id}/vacations/{user_id}")
+async def revoke_vacation(guild_id: int, user_id: str, access_level: str = Depends(requires_admin_access)):
+    if not bot_client:
+        raise HTTPException(status_code=503, detail="Discord bot is not currently running.")
+        
+    if guild_id == 0:
+        async with database.aiosqlite.connect(database.DB_NAME) as db:
+            cursor = await db.execute("SELECT guild_id FROM guild_configs LIMIT 1")
+            row = await cursor.fetchone()
+            actual_guild_id = row[0] if row else 0
+    else:
+        actual_guild_id = guild_id
+
+    guild = bot_client.get_guild(actual_guild_id)
+    if not guild:
+        try:
+            guild = await bot_client.fetch_guild(actual_guild_id)
+        except Exception:
+            raise HTTPException(status_code=404, detail="Guild not found or inaccessible by bot.")
+
+    try:
+        uid = int(user_id)
+        member = guild.get_member(uid)
+        if not member:
+            member = await guild.fetch_member(uid)
+    except Exception:
+        raise HTTPException(status_code=404, detail=f"Member with ID {user_id} not found in this server.")
+
+    cog = bot_client.get_cog("VacationManager")
+    if not cog:
+        raise HTTPException(status_code=500, detail="VacationManager cog is not loaded in the bot.")
+
+    try:
+        msg = await cog.end_vacation(guild, member)
+        return {"status": "success", "message": msg}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/guilds/{guild_id}/vacations/history")
+async def get_vacations_history(guild_id: int, access_level: str = Depends(requires_view_access)):
+    if guild_id == 0:
+        async with database.aiosqlite.connect(database.DB_NAME) as db:
+            cursor = await db.execute("SELECT guild_id FROM guild_configs LIMIT 1")
+            row = await cursor.fetchone()
+            actual_guild_id = row[0] if row else 0
+    else:
+        actual_guild_id = guild_id
+        
+    try:
+        history = await database.get_vacation_history(actual_guild_id)
+        return history
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/guilds/{guild_id}/vacation-roles")
+async def get_vacation_roles(guild_id: int, secondary_guild_id: Optional[str] = None, access_level: str = Depends(requires_view_access)):
+    if not bot_client:
+        raise HTTPException(status_code=503, detail="Discord bot is not currently running.")
+
+    if guild_id == 0:
+        async with database.aiosqlite.connect(database.DB_NAME) as db:
+            cursor = await db.execute("SELECT guild_id FROM guild_configs LIMIT 1")
+            row = await cursor.fetchone()
+            actual_guild_id = row[0] if row else 0
+    else:
+        actual_guild_id = guild_id
+
+    guild1 = bot_client.get_guild(actual_guild_id)
+    if not guild1:
+        try:
+            guild1 = await bot_client.fetch_guild(actual_guild_id)
+        except Exception:
+            raise HTTPException(status_code=404, detail="Primary Guild not found or inaccessible by bot.")
+
+    server1_roles = [{"id": str(r.id), "name": r.name} for r in guild1.roles if not r.is_default()]
+    server1_name = guild1.name
+
+    if not secondary_guild_id:
+        config = await database.get_guild_config(actual_guild_id)
+        secondary_guild_id = config.get("vacation_secondary_guild_id")
+    
+    server2_name = "Secondary Server"
+    server2_roles = []
+    
+    if secondary_guild_id and secondary_guild_id != "0":
+        try:
+            sec_id = int(secondary_guild_id)
+            guild2 = bot_client.get_guild(sec_id)
+            if not guild2:
+                guild2 = await bot_client.fetch_guild(sec_id)
+            if guild2:
+                server2_name = guild2.name
+                server2_roles = [{"id": str(r.id), "name": r.name} for r in guild2.roles if not r.is_default()]
+        except Exception as e:
+            server2_name = f"Secondary Server (Error fetching: {e})"
+            
+    return {
+        "server1_name": server1_name,
+        "server1_roles": server1_roles,
+        "server2_name": server2_name,
+        "server2_roles": server2_roles
     }

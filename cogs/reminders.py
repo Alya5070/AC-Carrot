@@ -9,11 +9,15 @@ import database
 def parse_duration(duration_str: str) -> timedelta:
     # Remove all whitespace to simplify validation
     clean_str = duration_str.replace(" ", "")
+    
+    # Supported units
+    unit_pattern = r"(?:seconds?|sec|s|minutes?|min|m|hours?|hr|h|days?|d|weeks?|wk|w|months?|mo|years?|yr|y)"
+    
     # Ensure the entire string strictly consists of digit+unit groups
-    if not re.match(r"^(\d+(?:\.\d+)?[smhdw])+$", clean_str, re.IGNORECASE):
+    if not re.match(rf"^(\d+(?:\.\d+)?{unit_pattern})+$", clean_str, re.IGNORECASE):
         return None
         
-    pattern = re.compile(r"(\d+(?:\.\d+)?)\s*([smhdw])", re.IGNORECASE)
+    pattern = re.compile(rf"(\d+(?:\.\d+)?)\s*({unit_pattern})", re.IGNORECASE)
     matches = pattern.findall(clean_str)
     if not matches:
         return None
@@ -22,16 +26,20 @@ def parse_duration(duration_str: str) -> timedelta:
     for value_str, unit in matches:
         value = float(value_str)
         unit = unit.lower()
-        if unit == 's':
+        if unit in ('s', 'sec', 'second', 'seconds'):
             total_seconds += value
-        elif unit == 'm':
+        elif unit in ('m', 'min', 'minute', 'minutes'):
             total_seconds += value * 60
-        elif unit == 'h':
+        elif unit in ('h', 'hr', 'hour', 'hours'):
             total_seconds += value * 3600
-        elif unit == 'd':
+        elif unit in ('d', 'day', 'days'):
             total_seconds += value * 86400
-        elif unit == 'w':
+        elif unit in ('w', 'wk', 'week', 'weeks'):
             total_seconds += value * 604800
+        elif unit in ('mo', 'month', 'months'):
+            total_seconds += value * 2592000
+        elif unit in ('y', 'yr', 'year', 'years'):
+            total_seconds += value * 31536000
             
     if total_seconds <= 0:
         return None

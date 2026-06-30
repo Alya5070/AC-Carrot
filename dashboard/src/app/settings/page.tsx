@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Settings, Save, AlertTriangle, Plus, X, Info, HelpCircle } from "lucide-react";
+import { Settings, Save, AlertTriangle, Plus, X, Info, HelpCircle, Search, Check, Shield } from "lucide-react";
 import { useGuild } from "../../context/GuildContext";
 import { apiFetch } from "../../lib/api";
 
@@ -22,6 +22,11 @@ type GuildConfig = {
   accepted_payments: string;
   banned_terms_regex: string;
   dm_on_warning: boolean;
+  vacation_role_id: string | null;
+  vacation_role_id_2: string | null;
+  vacation_secondary_guild_id: string | null;
+  vacation_strip_roles_1: string | null;
+  vacation_strip_roles_2: string | null;
 };
 
 type VerbalReason = {
@@ -37,7 +42,7 @@ type GuildInfo = {
 };
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<"verbal" | "paid">("verbal");
+  const [activeTab, setActiveTab] = useState<"verbal" | "paid" | "vacation">("verbal");
   const [verbalSubTab, setVerbalSubTab] = useState<"channels" | "reasons">("channels");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -45,9 +50,38 @@ export default function SettingsPage() {
   const [reasons, setReasons] = useState<VerbalReason[]>([]);
   const [expandedReasons, setExpandedReasons] = useState<number[]>([]);
 
+  // Vacation role and search states
+  const [vacationRoles, setVacationRoles] = useState<{
+    server1_name: string;
+    server1_roles: { id: string; name: string }[];
+    server2_name: string;
+    server2_roles: { id: string; name: string }[];
+  } | null>(null);
+  const [loadingVacationRoles, setLoadingVacationRoles] = useState(false);
+  const [searchServer1, setSearchServer1] = useState("");
+  const [searchServer2, setSearchServer2] = useState("");
+
   const { guilds, selectedGuildId } = useGuild();
   const currentGuild = guilds.find(g => g.id === selectedGuildId);
   const isViewOnly = currentGuild?.access_level === "view";
+
+  const fetchVacationRoles = async (gid: string) => {
+    setLoadingVacationRoles(true);
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    try {
+      let url = `${apiUrl}/api/guilds/${gid}/vacation-roles`;
+      if (config?.vacation_secondary_guild_id) {
+        url += `?secondary_guild_id=${encodeURIComponent(config.vacation_secondary_guild_id)}`;
+      }
+      const res = await apiFetch(url);
+      const rolesData = await res.json();
+      setVacationRoles(rolesData);
+    } catch (err) {
+      console.error("Error fetching vacation roles:", err);
+    } finally {
+      setLoadingVacationRoles(false);
+    }
+  };
 
   useEffect(() => {
     if (!selectedGuildId || selectedGuildId === "0") {
@@ -60,11 +94,15 @@ export default function SettingsPage() {
 
     Promise.all([
       apiFetch(`${apiUrl}/api/guilds/${selectedGuildId}/config`).then(res => res.json()),
-      apiFetch(`${apiUrl}/api/guilds/${selectedGuildId}/warning-reasons`).then(res => res.json())
+      apiFetch(`${apiUrl}/api/guilds/${selectedGuildId}/warning-reasons`).then(res => res.json()),
+      apiFetch(`${apiUrl}/api/guilds/${selectedGuildId}/vacation-roles`).then(res => res.json()).catch(() => null)
     ])
-      .then(([configData, reasonsData]) => {
+      .then(([configData, reasonsData, vRolesData]) => {
         setConfig(configData);
         setReasons(reasonsData);
+        if (vRolesData) {
+          setVacationRoles(vRolesData);
+        }
         setLoading(false);
       })
       .catch(err => {
@@ -190,11 +228,17 @@ export default function SettingsPage() {
             >
               Paid Requests
             </button>
+            <button
+              onClick={() => setActiveTab("vacation")}
+              className={`text-left px-3 py-2 rounded-lg transition-colors ${activeTab === 'vacation' ? 'bg-teal-500/10 text-teal-400 font-medium' : 'text-gray-400 hover:text-white hover:bg-teal-500/10'}`}
+            >
+              Vacation
+            </button>
           </nav>
         </aside>
 
         <div className="flex-1 min-w-0 glass-panel border border-teal-900/30 rounded-xl p-6">
-                  <div className="flex justify-between items-center mb-6">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <h2 className="text-2xl font-bold text-white flex items-center gap-2">
             <Settings className="w-6 h-6 text-teal-400" />
             Server Configuration
@@ -202,7 +246,7 @@ export default function SettingsPage() {
           <button 
             onClick={saveSettings} 
             disabled={saving || isViewOnly}
-            className="bg-teal-500 hover:bg-teal-600 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors"
+            className="w-full sm:w-auto bg-teal-500 hover:bg-teal-600 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors"
           >
             <Save className="w-4 h-4" />
             {saving ? "Saving..." : "Save Settings"}
@@ -587,6 +631,246 @@ export default function SettingsPage() {
 
             </div>
           )}
+
+          {activeTab === 'vacation' && (
+            <div className="space-y-6 animate-in fade-in duration-250">
+              <div>
+                <h3 className="text-sm font-semibold text-teal-400 uppercase tracking-wider border-b border-teal-900/20 pb-2 mb-4">
+                  Vacation Role Setup
+                </h3>
+                <div className="space-y-6">
+                  {/* Row 1: Secondary Server ID */}
+                  <div className="max-w-md space-y-2">
+                    <label className="text-xs text-gray-300 font-semibold uppercase flex items-center gap-1">
+                      Secondary Server ID
+                      <div className="group relative flex items-center">
+                        <HelpCircle className="w-3.5 h-3.5 text-gray-500 cursor-help" />
+                        <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block w-64 p-2.5 bg-gray-900 border border-teal-900 text-xs text-gray-200 rounded-lg shadow-2xl z-50 text-center pointer-events-none whitespace-normal normal-case leading-relaxed">
+                          ID of the secondary guild/server where staff roles should also be managed.
+                        </div>
+                      </div>
+                    </label>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        type="text"
+                        disabled={isViewOnly}
+                        value={config.vacation_secondary_guild_id || ""}
+                        onChange={e => handleIdChange("vacation_secondary_guild_id", e.target.value)}
+                        placeholder="Enter Secondary Guild ID"
+                        className="w-full bg-surface-darker/60 border border-teal-900/40 rounded-lg px-3.5 py-2 text-sm text-white focus:outline-none focus:border-teal-500/60 transition-colors placeholder:text-gray-600"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fetchVacationRoles(selectedGuildId)}
+                        disabled={loadingVacationRoles}
+                        className="w-full sm:w-auto bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/30 px-4 py-2.5 rounded-lg text-xs font-bold text-teal-300 transition-colors disabled:opacity-50 flex items-center justify-center gap-1 active:scale-95 shrink-0"
+                      >
+                        {loadingVacationRoles ? "Fetching..." : "Fetch Roles"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Row 2: Role selectors */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-xs text-gray-300 font-semibold uppercase flex items-center gap-1">
+                        Vacation Role ({vacationRoles?.server1_name || "Server 1"})
+                        <div className="group relative flex items-center">
+                          <HelpCircle className="w-3.5 h-3.5 text-gray-500 cursor-help" />
+                          <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block w-64 p-2.5 bg-gray-900 border border-teal-900 text-xs text-gray-200 rounded-lg shadow-2xl z-50 text-center pointer-events-none whitespace-normal normal-case leading-relaxed">
+                            Role applied to the staff member on {vacationRoles?.server1_name || "Server 1"} while they are away.
+                          </div>
+                        </div>
+                      </label>
+                      <select
+                        disabled={isViewOnly}
+                        value={config.vacation_role_id || ""}
+                        onChange={e => handleConfigChange("vacation_role_id", e.target.value || null)}
+                        className="w-full bg-surface-darker/60 border border-teal-900/40 rounded-lg px-3.5 py-2 text-sm text-white focus:outline-none focus:border-teal-500/60 transition-colors"
+                      >
+                        <option value="">-- Select {vacationRoles?.server1_name || "Server 1"} Role --</option>
+                        {vacationRoles?.server1_roles.map(r => (
+                          <option key={r.id} value={r.id}>{r.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-xs text-gray-300 font-semibold uppercase flex items-center gap-1">
+                        Vacation Role ({vacationRoles?.server2_name || "Server 2"})
+                        <div className="group relative flex items-center">
+                          <HelpCircle className="w-3.5 h-3.5 text-gray-500 cursor-help" />
+                          <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block w-64 p-2.5 bg-gray-900 border border-teal-900 text-xs text-gray-200 rounded-lg shadow-2xl z-50 text-center pointer-events-none whitespace-normal normal-case leading-relaxed">
+                            Role applied to the staff member on {vacationRoles?.server2_name || "Server 2"} while they are away.
+                          </div>
+                        </div>
+                      </label>
+                      <select
+                        disabled={isViewOnly || !config.vacation_secondary_guild_id}
+                        value={config.vacation_role_id_2 || ""}
+                        onChange={e => handleConfigChange("vacation_role_id_2", e.target.value || null)}
+                        className="w-full bg-surface-darker/60 border border-teal-900/40 rounded-lg px-3.5 py-2 text-sm text-white focus:outline-none focus:border-teal-500/60 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <option value="">-- Select {vacationRoles?.server2_name || "Server 2"} Role --</option>
+                        {vacationRoles?.server2_roles.map(r => (
+                          <option key={r.id} value={r.id}>{r.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-teal-400 uppercase tracking-wider border-b border-teal-900/20 pb-2">
+                  Roles to Strip on Vacation
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Server 1 Roles Checklist */}
+                  <div className="bg-surface-darker/35 border border-teal-900/20 rounded-xl p-5 flex flex-col h-[400px]">
+                    <div className="flex justify-between items-center mb-3">
+                      <h4 className="text-xs font-bold text-gray-200 uppercase tracking-wide truncate max-w-[70%]">
+                        Roles in {vacationRoles?.server1_name || "Main Server"}
+                      </h4>
+                      <span className="text-[10px] bg-teal-500/10 text-teal-400 border border-teal-500/20 px-2 py-0.5 rounded-full font-medium">
+                        {(config.vacation_strip_roles_1 ? config.vacation_strip_roles_1.split(",").filter(x => x).length : 0)} selected
+                      </span>
+                    </div>
+                    
+                    {/* Search bar */}
+                    <div className="relative mb-3">
+                      <Search className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={searchServer1}
+                        onChange={e => setSearchServer1(e.target.value)}
+                        placeholder={`Filter ${vacationRoles?.server1_name || "Server 1"} roles...`}
+                        className="w-full bg-surface-darker border border-teal-900/40 rounded-lg pl-9 pr-4 py-1.5 text-xs text-white focus:outline-none focus:border-teal-500/40"
+                      />
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
+                      {!vacationRoles || (vacationRoles.server1_roles || []).filter(r => r.name.toLowerCase().includes(searchServer1.toLowerCase())).length === 0 ? (
+                        <p className="text-xs text-gray-500 text-center py-8">No matching roles found.</p>
+                      ) : (
+                        (vacationRoles.server1_roles || [])
+                          .filter(r => r.name.toLowerCase().includes(searchServer1.toLowerCase()))
+                          .map(role => {
+                            const selected = config.vacation_strip_roles_1 ? config.vacation_strip_roles_1.split(",").filter(x => x) : [];
+                            const isChecked = selected.includes(role.id);
+                            return (
+                              <label 
+                                key={role.id} 
+                                className={`flex items-center justify-between p-2.5 rounded-lg text-xs cursor-pointer select-none transition-all ${
+                                  isChecked 
+                                    ? "bg-teal-500/5 border border-teal-500/20 text-white" 
+                                    : "hover:bg-teal-500/5 border border-transparent text-gray-400 hover:text-gray-200"
+                                }`}
+                              >
+                                <div className="flex items-center gap-2.5">
+                                  <input
+                                    type="checkbox"
+                                    disabled={isViewOnly}
+                                    checked={isChecked}
+                                    onChange={() => {
+                                      const list = isChecked ? selected.filter(x => x !== role.id) : [...selected, role.id];
+                                      handleConfigChange("vacation_strip_roles_1", list.join(","));
+                                    }}
+                                    className="sr-only"
+                                  />
+                                  <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-all ${
+                                    isChecked 
+                                      ? "bg-teal-500 border-teal-500" 
+                                      : "border-teal-900/60 bg-surface-darker/60"
+                                  }`}>
+                                    {isChecked && <Check className="w-3 h-3 text-surface-darker stroke-[4px]" />}
+                                  </div>
+                                  <span>{role.name}</span>
+                                </div>
+                              </label>
+                            );
+                          })
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Server 2 Roles Checklist */}
+                  <div className="bg-surface-darker/35 border border-teal-900/20 rounded-xl p-5 flex flex-col h-[400px]">
+                    <div className="flex justify-between items-center mb-3">
+                      <h4 className="text-xs font-bold text-gray-200 uppercase tracking-wide truncate max-w-[70%]">
+                        Roles in {vacationRoles?.server2_name || "Secondary Server"}
+                      </h4>
+                      <span className="text-[10px] bg-teal-500/10 text-teal-400 border border-teal-500/20 px-2 py-0.5 rounded-full font-medium">
+                        {(config.vacation_strip_roles_2 ? config.vacation_strip_roles_2.split(",").filter(x => x).length : 0)} selected
+                      </span>
+                    </div>
+
+                    {/* Search bar */}
+                    <div className="relative mb-3">
+                      <Search className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        disabled={!config.vacation_secondary_guild_id}
+                        value={searchServer2}
+                        onChange={e => setSearchServer2(e.target.value)}
+                        placeholder={config.vacation_secondary_guild_id ? `Filter ${vacationRoles?.server2_name || "Server 2"} roles...` : "Configure secondary server ID first..."}
+                        className="w-full bg-surface-darker border border-teal-900/40 rounded-lg pl-9 pr-4 py-1.5 text-xs text-white focus:outline-none focus:border-teal-500/40 disabled:opacity-40"
+                      />
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
+                      {!vacationRoles || !config.vacation_secondary_guild_id || (vacationRoles.server2_roles || []).filter(r => r.name.toLowerCase().includes(searchServer2.toLowerCase())).length === 0 ? (
+                        <p className="text-xs text-gray-500 text-center py-8">
+                          {!config.vacation_secondary_guild_id 
+                            ? "Configure a Secondary Server ID to list roles." 
+                            : "No matching roles found."}
+                        </p>
+                      ) : (
+                        (vacationRoles.server2_roles || [])
+                          .filter(r => r.name.toLowerCase().includes(searchServer2.toLowerCase()))
+                          .map(role => {
+                            const selected = config.vacation_strip_roles_2 ? config.vacation_strip_roles_2.split(",").filter(x => x) : [];
+                            const isChecked = selected.includes(role.id);
+                            return (
+                              <label 
+                                key={role.id} 
+                                className={`flex items-center justify-between p-2.5 rounded-lg text-xs cursor-pointer select-none transition-all ${
+                                  isChecked 
+                                    ? "bg-teal-500/5 border border-teal-500/20 text-white" 
+                                    : "hover:bg-teal-500/5 border border-transparent text-gray-400 hover:text-gray-200"
+                                }`}
+                              >
+                                <div className="flex items-center gap-2.5">
+                                  <input
+                                    type="checkbox"
+                                    disabled={isViewOnly}
+                                    checked={isChecked}
+                                    onChange={() => {
+                                      const list = isChecked ? selected.filter(x => x !== role.id) : [...selected, role.id];
+                                      handleConfigChange("vacation_strip_roles_2", list.join(","));
+                                    }}
+                                    className="sr-only"
+                                  />
+                                  <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-all ${
+                                    isChecked 
+                                      ? "bg-teal-500 border-teal-500" 
+                                      : "border-teal-900/60 bg-surface-darker/60"
+                                  }`}>
+                                    {isChecked && <Check className="w-3 h-3 text-surface-darker stroke-[4px]" />}
+                                  </div>
+                                  <span>{role.name}</span>
+                                </div>
+                              </label>
+                            );
+                          })
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
         </div>
       </div>
     </div>

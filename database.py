@@ -126,7 +126,64 @@ async def init_db():
         except aiosqlite.OperationalError:
             pass # Column already exists
 
-        
+        # Vacation configurations in guild_configs
+        try:
+            await db.execute('ALTER TABLE guild_configs ADD COLUMN vacation_role_id INTEGER')
+            await db.commit()
+        except aiosqlite.OperationalError:
+            pass
+        try:
+            await db.execute('ALTER TABLE guild_configs ADD COLUMN vacation_role_id_2 INTEGER')
+            await db.commit()
+        except aiosqlite.OperationalError:
+            pass
+        try:
+            await db.execute('ALTER TABLE guild_configs ADD COLUMN vacation_secondary_guild_id INTEGER')
+            await db.commit()
+        except aiosqlite.OperationalError:
+            pass
+        try:
+            await db.execute('ALTER TABLE guild_configs ADD COLUMN vacation_strip_roles_1 TEXT')
+            await db.commit()
+        except aiosqlite.OperationalError:
+            pass
+        try:
+            await db.execute('ALTER TABLE guild_configs ADD COLUMN vacation_strip_roles_2 TEXT')
+            await db.commit()
+        except aiosqlite.OperationalError:
+            pass
+
+        # Create vacations table
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS vacations (
+                user_id INTEGER NOT NULL,
+                guild_id INTEGER NOT NULL,
+                roles_server_1 TEXT NOT NULL,
+                roles_server_2 TEXT,
+                reason TEXT,
+                vacation_start TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (guild_id, user_id)
+            )
+        ''')
+        await db.commit()
+
+        # Create vacation history table
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS vacation_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                guild_id INTEGER NOT NULL,
+                username TEXT,
+                avatar_url TEXT,
+                vacation_start TEXT,
+                vacation_end TEXT,
+                reason TEXT,
+                roles_server_1 TEXT,
+                roles_server_2 TEXT
+            )
+        ''')
+        await db.commit()
+
         await db.execute('''
             CREATE TABLE IF NOT EXISTS reaction_roles (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -223,7 +280,12 @@ async def init_db():
                 reminder_threshold INTEGER DEFAULT 7,
                 accepted_currencies TEXT DEFAULT 'USD,EUR,GBP',
                 accepted_payments TEXT DEFAULT 'PayPal,Ko-Fi,Stripe',
-                banned_terms_regex TEXT DEFAULT 'robux|nitro|gift card|giftcard|crypto|btc|eth|ltc'
+                banned_terms_regex TEXT DEFAULT 'robux|nitro|gift card|giftcard|crypto|btc|eth|ltc',
+                vacation_role_id INTEGER,
+                vacation_role_id_2 INTEGER,
+                vacation_secondary_guild_id INTEGER,
+                vacation_strip_roles_1 TEXT,
+                vacation_strip_roles_2 TEXT
             )
         ''')
         
@@ -334,7 +396,7 @@ async def get_guild_config(guild_id: int):
                 "guild_id", "staff_notice_channel_id", "staff_commands_channel_id", "staff_log_channel_id",
                 "team_leader_role_id", "moderator_role_id", "trial_moderator_role_id",
                 "submit_channel_id", "review_channel_id", "approved_channel_id", "approval_log_channel_id",
-                "dm_on_warning"
+                "dm_on_warning", "vacation_role_id", "vacation_role_id_2", "vacation_secondary_guild_id"
             ]
             for k in keys_to_cast:
                 if k in d and d[k] is not None:
@@ -362,7 +424,12 @@ async def get_guild_config(guild_id: int):
             "accepted_currencies": "USD, EUR, GBP, CAD, AUD, \\$|£|€",
             "accepted_payments": "PayPal, Stripe, CashApp, Venmo, Ko-Fi",
             "banned_terms_regex": "robux|robuck|robucks|crypto|btc|eth|sol|ltc|usdt|usdc",
-            "dm_on_warning": 1
+            "dm_on_warning": 1,
+            "vacation_role_id": 0,
+            "vacation_role_id_2": 0,
+            "vacation_secondary_guild_id": 0,
+            "vacation_strip_roles_1": "",
+            "vacation_strip_roles_2": ""
         }
 
 async def migrate_env_to_db(guild_id: int):
@@ -882,3 +949,46 @@ async def save_chatbot_config(guild_id: int, config: dict):
                 
         await db.commit()
 
+async def add_vacation_record(user_id: int, guild_id: int, roles_server_1: str, roles_server_2: str, reason: str = None):
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute(
+            "INSERT OR REPLACE INTO vacations (user_id, guild_id, roles_server_1, roles_server_2, reason) VALUES (?, ?, ?, ?, ?)",
+            (user_id, guild_id, roles_server_1, roles_server_2, reason)
+        )
+        await db.commit()
+
+async def get_vacation_record(user_id: int, guild_id: int) -> dict:
+    async with aiosqlite.connect(DB_NAME) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM vacations WHERE user_id = ? AND guild_id = ?", (user_id, guild_id))
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+async def remove_vacation_record(user_id: int, guild_id: int):
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute("DELETE FROM vacations WHERE user_id = ? AND guild_id = ?", (user_id, guild_id))
+        await db.commit()
+
+async def get_all_active_vacations(guild_id: int) -> list:
+    async with aiosqlite.connect(DB_NAME) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM vacations WHERE guild_id = ? ORDER BY vacation_start DESC", (guild_id,))
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
+
+async def add_vacation_history_record(user_id: int, guild_id: int, username: str, avatar_url: str, vacation_start: str, vacation_end: str, reason: str, roles_server_1: str, roles_server_2: str):
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute(
+            """INSERT INTO vacation_history 
+               (user_id, guild_id, username, avatar_url, vacation_start, vacation_end, reason, roles_server_1, roles_server_2) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (user_id, guild_id, username, avatar_url, vacation_start, vacation_end, reason, roles_server_1, roles_server_2)
+        )
+        await db.commit()
+
+async def get_vacation_history(guild_id: int) -> list:
+    async with aiosqlite.connect(DB_NAME) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM vacation_history WHERE guild_id = ? ORDER BY vacation_end DESC", (guild_id,))
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows]

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Activity, ShieldAlert, CreditCard, Bell } from "lucide-react";
+import { Activity, ShieldAlert, CreditCard, Bell, X } from "lucide-react";
 import Link from "next/link";
 import { useGuild } from "../../context/GuildContext";
 import { OverviewChart } from "../../components/OverviewChart";
@@ -39,13 +39,14 @@ export default function OverviewPage() {
 
   const [recentWarnings, setRecentWarnings] = useState<Warning[]>([]);
   const [recentRequests, setRecentRequests] = useState<PaidRequest[]>([]);
+
   const { selectedGuildId } = useGuild();
 
   useEffect(() => {
     if (!selectedGuildId || selectedGuildId === "0") {
       setStats({
-        bot_status: "--",
-        ping: "--",
+        bot_status: "Offline",
+        ping: "0ms",
         pending_requests: 0,
         verbals_this_week: 0,
         verbals_trend: "--",
@@ -125,6 +126,8 @@ export default function OverviewPage() {
       <div className="mb-8">
         <OverviewChart />
       </div>
+
+
 
       {/* Recent Activity Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
